@@ -152,9 +152,21 @@ InvalidClientTokenId: The security token included in the request is invalid.   �
 
 **デプロイスクリプトの `aws ecr get-login-password` も同じ理由で失敗する。**
 
-- **当座の回避**: `unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY`
-- **根治**: `backend/src/libs/storage.ts` の `S3Client` に**ローカル時のみ明示的な fake 資格情報を渡す**(`IS_LOCAL_DEVELOPMENT` で分岐)。そのうえで compose から 2 つの環境変数を削除する。**本番はタスクロールなので既定チェーンのままでよい**
-- 雛形にも同じ問題があるため還元対象(`20260806-derive-first-project.md` の項目 8)
+**対応済み(2026-08-06)**: 資格情報チェーンと**衝突しない名前**に改名し、SDK へ明示的に渡す形にした。
+
+| 変更 | 内容 |
+|---|---|
+| `docker-compose.local.yml` / `ci.yml` | `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` → **`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`** |
+| `backend/src/config.ts` | `S3_CREDENTIALS` を追加(両方揃っているときだけオブジェクト、無ければ `undefined`) |
+| `backend/src/libs/storage.ts` | `S3Client` に `credentials: Config.S3_CREDENTIALS` を渡す。**本番は `undefined` → 既定チェーン = タスクロール** |
+
+**移行中も両方の状態で動く**: 新コードは `S3_ACCESS_KEY_ID` が未設定なら `credentials: undefined` になり、
+稼働中コンテナに残っている旧 `AWS_ACCESS_KEY_ID` を既定チェーンが拾う。コンテナ再作成後は新名で明示的に渡る。
+
+**残: 開発コンテナの再作成**(compose 変更の反映)。それまでは `terraform/environments/prod/*/.envrc` の
+`unset` 3 行が旧名を打ち消す。再作成後はその 3 行を削除してよい。
+
+- 雛形にも同じ問題があるため還元対象(`20260806-derive-first-project.md` の項目 6)
 
 #### 0-b. コンソールでの初期設定(人手が必要)
 
@@ -304,6 +316,28 @@ Arn: arn:aws:sts::439996178164:assumed-role/AWSReservedSSO_AdministratorAccess_.
 **削除するもの**: `14_user.tf-user-iam.tf` / `14_user.tf-user-main.tf` と対応するポリシー JSON 2 本(`12_policy.tf-user-*.json`)。
 
 `terraform-local-developer`(SSM 読み取り専用)は用途があるので残してよいが、**静的キーを配るくらいなら SSO のパーミッションセットに寄せる**ほうがよい。ローカル開発は `IS_LOCAL_DEVELOPMENT=true` のとき `~/.ssm-keys.json` を読むので、そもそも AWS への到達を必要としない。
+
+#### 実施記録(2026-08-06 仮組み完了・未 apply)
+
+`terraform/` に 4 スタック 30 ファイルを作成。**`terraform fmt` 差分なし、4 スタックとも `terraform validate` 成功。**
+`apply` はしていない(下記の未確定値が埋まってから)。詳細は `terraform/README.md`。
+
+踏んだもの:
+
+- variable の `description` 内で `${project_name}` と書くと**補間として解釈されて validate が落ちる**
+- `aws_db_instance` のバックアップ時刻は **`backup_window` / `maintenance_window`**。
+  `preferred_` 接頭辞が付くのは `aws_rds_cluster`(Aurora)側
+
+雛形から意図的に変えた点:
+
+| | 雛形 | ここ |
+|---|---|---|
+| SG の書き方 | `ingress`/`egress` ブロック | **`aws_vpc_security_group_*_rule`(独立リソース)** — 差分が読みやすく、ルール単位で追える |
+| SPA バケットポリシー | `distribution/*` を許可 | **該当ディストリビューション 1 つに限定** |
+| EventBridge のターゲット | リビジョン固定 ARN | **`arn_without_revision`** |
+| CloudFront | レスポンスヘッダポリシーなし | **HSTS / nosniff / frame-options を付与**(`docs/known-issues.md` の HSTS 宿題を解消) |
+| ログ保持 | 無期限 | **30 日** |
+| ECR | ライフサイクルなし | **直近 10 イメージ** |
 
 ### 2. ネットワーク(`prod/base`)
 

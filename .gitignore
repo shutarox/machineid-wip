@@ -6,6 +6,15 @@ build
 # terraform の各スタックは AWS_PROFILE の切り替えに .envrc を使い、これはコミットする。
 # 中身はプロファイル名だけで秘密情報を含まない(docs/plans/20260806-aws-prod-setup.md)
 !terraform/environments/**/.envrc
+
+# terraform: プロバイダの実体と state はコミットしない。
+# **.terraform.lock.hcl はコミットする**(プロバイダのバージョンを固定するため)
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.auto.tfvars
+crash.log
+crash.*.log
 test-results
 playwright-report
 coverage
