@@ -1,0 +1,21 @@
+{
+  "name": "ecs-log-monitor",
+  "version": "1.0.0",
+  "description": "ECSエラーログ監視Lambda関数",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "aws-sdk": "^2.1691.0"
+  },
+  "keywords": [
+    "aws",
+    "lambda",
+    "ecs",
+    "cloudwatch",
+    "slack"
+  ],
+  "author": "",
+  "license": "MIT"
+}

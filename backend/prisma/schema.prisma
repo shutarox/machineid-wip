@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ログイン情報
+
+model LoginSession {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  sessionId String @db.VarChar(255)
+  deviceId  String @db.VarChar(255)
+  loginIp   String @db.VarChar(255)
+  userAgent String @db.VarChar(255)
+
+  tenantId     String @db.Uuid
+  tenant       Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  userId       String @db.Uuid
+  user         User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  lastActiveAt DateTime @db.Timestamptz(3) @default(now())
+
+  @@unique([sessionId])
+  @@unique([deviceId])
+}
+
+// テナント
+
+model Tenant {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  tenantName String @db.VarChar(255)
+  tenantCode String @db.VarChar(255)
+  sourceIpRange String @db.VarChar(255) @default("0.0.0.0/0")
+  configurations Json @db.JsonB @default("{}")
+
+  users                 User[]
+  dateExamples          DateExample[]
+  editLock              EditLock[]
+  loginSessions         LoginSession[]
+  debugParameters       DebugParameter[]
+  passwordResetRequests PasswordResetRequest[]
+  reports               Report[]
+  uploadedImages        UploadedImage[]
+
+  @@unique([tenantName])
+  @@unique([tenantCode])
+}
+
+// ユーザ
+
+enum Role {
+  ADMIN
+  MEMBER
+}
+
+model User {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  userName String @db.VarChar(255)
+  role     Role
+
+  isDisabled Boolean @default(false)
+
+  loginId      String     @db.VarChar(255)
+  passwordHash String     @db.VarChar(255)
+  email        String     @db.VarChar(255)
+
+  passwordChangedAt   DateTime? @db.Timestamptz(3)
+  lastLoginAt         DateTime? @db.Timestamptz(3)
+
+  loginSessions         LoginSession[]
+  passwordResetRequests PasswordResetRequest[]
+  reports               Report[]
+  uploadedImages        UploadedImage[]
+
+  @@unique([tenantId, loginId])
+}
+
+// 排他制御用ロック
+
+model EditLock {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  lockName String   @db.VarChar(255)
+  lockedAt DateTime @db.Timestamptz(3) // 更新かけられればなんでもよかったがとりあえず
+
+  @@unique([tenantId, lockName])
+}
+
+// パスワードリセット申請
+
+model PasswordResetRequest {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  requestedAt DateTime @db.Timestamptz(3)
+  lastSentAt  DateTime @db.Timestamptz(3)
+  authCode    String @db.VarChar(6)
+
+  failCount   Int @default(0)
+
+  @@unique([tenantId, userId])
+}
+
+// @db.Date カラムの参照例
+//
+// date 型(TZ なし)カラムは「カラム名 date」のみ許可(起動時検証)で、
+// Prisma 拡張が JST の年月日を保って入出力を正規化する。
+// このモデルはその挙動のリグレッションテスト対象を兼ねる
+
+model DateExample {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  date DateTime @db.Date
+
+  @@unique([tenantId, date])
+}
+
+// デバッグパラメータ
+
+model DebugParameter {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  name      String @db.VarChar(255)
+  value     String @db.VarChar(255)
+
+  @@unique([tenantId, name])
+}
+
+// 報告書とその添付画像。
+// ファイルアップロードの参照実装(ADR / 計画は docs/plans/20260805-s3-image-upload.md)。
+
+model Report {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  title   String @db.VarChar(255)
+  comment String @db.Text
+
+  uploadedImages UploadedImage[]
+
+  // 一覧は tenantId(ADMIN)または tenantId + userId(MEMBER)で引き、作成日時の降順で並べる
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, createdAt])
+}
+
+model UploadedImage {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+
+  userId String @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // null = 仮アップロード(プレビュー中)、非 null = 報告書に確定済み。
+  // 確定状態はこの 1 本だけで表す(confirmedAt のような second source of truth を作らない)
+  reportId String? @db.Uuid
+  report   Report? @relation(fields: [reportId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // S3 のキー。パスにテナントを含めない(アップロード時点で tenantId が
+  // 確定しないユーザがありうるため)。判断は docs/plans/20260805-s3-image-upload.md
+  //
+  // 値は id から決まるので導出もできるが、あえてカラムに持つ。**外部システムに
+  // 対して実際に行った副作用の記録**であり、導出関数を変えても S3 上の実体は
+  // 変わらないため。派生プロジェクトがパス規則を変えても(例: 上記の判断を覆して
+  // tenantId を入れる)、既存行は自分のキーを持っているので読めなくならない。
+  // この「INSERT 時点でキーが確定していること」が、uploadedImages.POST.ts で
+  // id を先に採番している理由になっている
+  storageKey   String @db.VarChar(255)
+  thumbnailKey String @db.VarChar(255)
+
+  mimeType String @db.VarChar(255)
+  byteSize Int
+  width    Int
+  height   Int
+
+  // 画像本体からは EXIF を除去するが、記録としてはここに残す
+  rawExif Json
+
+  @@index([tenantId, reportId])
+  // 仮アップロードの 3 日タイムアウト削除で引く
+  @@index([tenantId, createdAt])
+}

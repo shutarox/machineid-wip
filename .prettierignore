@@ -1,0 +1,11 @@
+node_modules/
+dist/
+build/
+generated/
+.*/
+*lock*
+*.min.js
+*.md
+# 自動生成物(整形すると CI の差分ゼロ検証と衝突する)
+backend/src/generated/
+frontend/src/generated/

@@ -1,0 +1,59 @@
+{
+  "$schema": "https://unpkg.com/knip@6/schema.json",
+  "workspaces": {
+    ".": {
+      "entry": [
+        "tools/*.js",
+        "e2e/*.ts"
+      ],
+      "project": [
+        "tools/**/*.js",
+        "e2e/**/*.ts",
+        "*.ts"
+      ]
+    },
+    "backend": {
+      "entry": [
+        "src/index.ts",
+        "src/routes/**/*.ts",
+        "script/**/*.ts",
+        "test/**/*.ts",
+        "eslint-rules/*.mjs"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "script/**/*.ts",
+        "test/**/*.ts"
+      ],
+      "ignore": [
+        "src/generated/**",
+        "src/@types/**",
+        "src/libs/scriptLogger.ts",
+        "src/models/currentDate.ts"
+      ]
+    },
+    "frontend": {
+      "project": [
+        "src/**/*.{ts,tsx}"
+      ],
+      "ignore": [
+        "src/generated/**",
+        "src/components/ui/**"
+      ]
+    }
+  },
+  "ignoreBinaries": [
+    "jq",
+    "pm2",
+    "unbuffer",
+    "psql",
+    "createdb",
+    "direnv",
+    "prisma",
+    "tsx"
+  ],
+  "ignoreDependencies": [
+    "pino-pretty",
+    "eslint-config-prettier"
+  ]
+}

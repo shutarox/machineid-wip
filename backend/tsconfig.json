@@ -1,0 +1,38 @@
+{
+  "extends": "@tsconfig/node20/tsconfig.json",
+  "compilerOptions": {
+    "target": "ESNext",
+    "lib": ["ES2023"],
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+
+    "rootDir": ".",
+    "rootDirs": ["./src", "./script"],
+    "typeRoots": [
+      "../node_modules/@types",
+      "./node_modules/@types",
+      "./src/@types"
+    ],
+    "paths": {
+      "@/*": ["./src/*"],
+      "openapi-typescript": ["./src/@types/openapi-typescript"]
+    },
+
+    "outDir": "./build",
+
+    "noUncheckedIndexedAccess": true,
+    "forceConsistentCasingInFileNames": true,
+    "allowJs": true,
+    "isolatedModules": true,
+    "resolveJsonModule": true,
+    "noErrorTruncation": true,
+    "allowSyntheticDefaultImports": true, // デフォルトインポートを許可
+    "useDefineForClassFields": true // フィールド初期化の挙動を最新仕様に
+  },
+  "include": ["src/**/*", "script/**/*", "test/**/*", "vitest.config.ts"],
+  "exclude": ["node_modules"]
+}

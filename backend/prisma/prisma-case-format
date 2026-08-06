@@ -1,0 +1,7 @@
+default: 'mapTable=snake,plural; mapField=snake;'
+override:
+  Test:
+    default: 'mapTable=!test'
+  DateTest:
+    default: 'mapTable=!date_test'
+  

@@ -1,0 +1,80 @@
+# image: myapp-stg:latest
+# build: docker build -f ./Dockerfile.stg -t myapp-stg:latest .
+
+
+FROM node:24.14.0-slim AS node
+
+# --------- アプリのビルド ---------
+
+FROM ubuntu:24.04 AS build
+
+WORKDIR /app/backend
+
+COPY --from=node /usr/local/include/ /usr/local/include/
+COPY --from=node /usr/local/lib/ /usr/local/lib/
+COPY --from=node /usr/local/bin/ /usr/local/bin/
+
+# パッケージインストールだけは先のレイヤーでやっておく
+COPY build/app/backend/package.json ./
+COPY build/app/backend/pnpm-lock.yaml ./
+COPY build/app/backend/prisma ./prisma
+
+RUN npm install -g pnpm@10.7.1
+RUN pnpm install --frozen-lockfile
+RUN pnpm prisma generate
+
+# アプリビルド
+
+COPY --chown=appuser:appuser build/app/backend ./
+RUN pnpm build \
+    && find ./build -type f -name "*.map" -delete
+
+# --------- ここから下は本番環境 ---------
+
+FROM ubuntu:24.04 AS base
+
+COPY --from=node /usr/local/include/ /usr/local/include/
+COPY --from=node /usr/local/lib/ /usr/local/lib/
+COPY --from=node /usr/local/bin/ /usr/local/bin/
+
+# DEBIAN_FRONTEND=noninteractive は、tzdata のインストール時の
+# 地域選択のインタラクティブなプロンプトを抑制するためのもの
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get upgrade -y \
+    && apt-get install -y --no-install-recommends wget gnupg ca-certificates \
+    && wget -O- https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor > /usr/share/keyrings/pgdg-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && apt-get update \
+    && groupadd --gid 2000 appuser \
+    && useradd --uid 2000 --gid appuser --shell /bin/bash --home-dir /app appuser \
+    && apt-get install -y --no-install-recommends \
+        tini \
+        locales \
+        tzdata \
+        postgresql-client-17 \
+    && ln -snf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime \
+    && echo "Asia/Tokyo" > /etc/timezone \
+    && locale-gen ja_JP.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=build /app/backend/build                /app/backend/build
+COPY --from=build /app/backend/node_modules         /app/backend/node_modules
+COPY --from=build /app/backend/package.json         /app/backend/
+COPY --from=build /app/backend/prisma/schema.prisma /app/backend/prisma/
+
+COPY --chown=appuser:appuser build/app/etc/onstart-prod-main.sh           /app/etc/
+
+ARG BUILD_VERSION
+ENV APPX_BUILD_VERSION=${BUILD_VERSION}
+
+ENV TZ=Asia/Tokyo
+ENV LANG=ja_JP.UTF-8
+ENV LC_MESSAGES=C
+ENV LC_TIME=C
+
+WORKDIR /app
+
+EXPOSE 8080
+
+ENTRYPOINT ["tini", "--", "bash", "/app/etc/onstart-prod-main.sh"]

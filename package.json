@@ -1,0 +1,25 @@
+{
+  "name": "myapp",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.7.1",
+  "scripts": {
+    "preinstall": "only-allow pnpm",
+    "bootstrap": "node tools/bootstrap.js",
+    "dev": "pnpm -r run dev",
+    "stop": "pnpm -r run stop",
+    "check": "pnpm -r run check",
+    "lint": "pnpm -r run lint",
+    "test": "pnpm -r run test",
+    "e2e": "playwright test",
+    "verify": "pnpm check && pnpm lint && pnpm test && pnpm e2e",
+    "knip": "knip",
+    "build": "pnpm -r run build",
+    "format": "pnpm -r run format"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.61.1",
+    "knip": "^6.31.0",
+    "only-allow": "^1.2.1"
+  }
+}

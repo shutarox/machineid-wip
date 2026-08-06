@@ -1,0 +1,58 @@
+{
+  "version": "0.2",
+  "language": "en",
+  "words": [
+    // config / product
+    "myappdomain",
+    "myapp",
+    "appuser",
+    // system
+    "lintrc",
+    "VITE",
+    // aws
+    "Fargate",
+    "eventbridge",
+    // fastify
+    "unsignCookie",
+    "fastify",
+    // prisma
+    "DMMF",
+    "dbgenerated",
+    "autoincrement",
+    "datamodel",
+    "timestamptz",
+    // postgresql
+    "nextval",
+    "psql",
+    "pgdump",
+    "jsonb",
+    "pghost",
+    // mysql
+    "initdb.d",
+    // libs
+    "tldts",
+    "youch",
+    "chakra",
+    "formbody",
+    "typesync",
+    "parseuri",
+    "typebox",
+    "headlessui",
+    "jotai",
+    // commnads / processes
+    "mysqld",
+    // compoundwords
+    "contenteditable",
+    "fullreset",
+    "portcheck",
+    "dbhost",
+    // abbreviations
+    "alnum",
+    "OASJ",
+    // other
+    "unavailabilities",
+    "gapi",
+    "collab",
+    "collabs",
+  ]
+}

@@ -1,0 +1,141 @@
+# https://zenn.dev/jrsyo/articles/e42de409e62f5d
+
+FROM node:24.14.0-slim AS node
+FROM ubuntu:24.04 AS base
+
+# apt clean && rm -rf /var/lib/apt/lists/*
+
+# new way to get node, let's copy in the specific version we want from a docker image
+# this avoids depdency package installs (python3) that the deb package requires
+COPY --from=node /usr/local/include/ /usr/local/include/
+COPY --from=node /usr/local/lib/ /usr/local/lib/
+COPY --from=node /usr/local/bin/ /usr/local/bin/
+
+# DEBIAN_FRONTEND=noninteractive は、tzdata のインストール時の
+# 地域選択のインタラクティブなプロンプトを抑制するためのもの
+ENV DEBIAN_FRONTEND=noninteractive
+
+# gid/uid をビルド時に指定できるようにする
+ARG APP_GID=2000
+ARG APP_UID=2000
+RUN userdel -r ubuntu
+# HOME はリポジトリマウント先 (/app) と分離する。
+# HOME=/app にするとホーム系 dotfile (~/.npmrc 等) がリポジトリに混入するため。
+RUN groupadd --gid ${APP_GID} appuser \
+    && useradd --uid ${APP_UID} --gid appuser --shell /bin/bash --home-dir /home/appuser --create-home appuser
+
+RUN apt-get update && apt-get upgrade -y
+
+RUN apt-get update && apt-get install -y \
+        wget \
+        gnupg \
+        software-properties-common \
+    && wget -O- https://apt.releases.hashicorp.com/gpg | gpg --dearmor > /usr/share/keyrings/hashicorp-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/hashicorp-archive-keyring.gpg] https://apt.releases.hashicorp.com $(lsb_release -cs) main" > /etc/apt/sources.list.d/hashicorp.list \
+    && wget -O- https://www.postgresql.org/media/keys/ACCC4CF8.asc | gpg --dearmor > /usr/share/keyrings/pgdg-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/pgdg-archive-keyring.gpg] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
+    && wget -O- https://aquasecurity.github.io/trivy-repo/deb/public.key | gpg --dearmor > /usr/share/keyrings/trivy-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/trivy-archive-keyring.gpg] https://aquasecurity.github.io/trivy-repo/deb $(lsb_release -cs) main" > /etc/apt/sources.list.d/trivy.list \
+    && wget -O- https://cli.github.com/packages/githubcli-archive-keyring.gpg > /usr/share/keyrings/githubcli-archive-keyring.gpg \
+    && echo "deb [signed-by=/usr/share/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+    && apt-get update
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl \
+        gnupg \
+        lsb-release \
+        \
+        tini \
+        locales \
+        tzdata \
+        # postgres サーバ(docker-compose.local.yml の postgres:18)とメジャーを揃える。
+        # ずれると pg_dump が "server version mismatch" で中断する
+        postgresql-client-18 \
+        \
+        language-pack-ja-base language-pack-ja  \
+        screen \
+        telnet \
+        sudo \
+        vim \
+        git \
+        gh \
+        ssh \
+        curl \
+        psmisc \
+        dnsutils \
+        iputils-ping \
+        less \
+        jq \
+        apache2-utils \
+        unzip \
+        zip \
+        groff \
+        direnv \
+        expect \
+        \
+        terraform \
+        trivy
+
+# Docker 関連
+
+# Docker公式GPGキーの追加
+RUN install -m 0755 -d /etc/apt/keyrings && \
+    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
+    gpg --dearmor -o /etc/apt/keyrings/docker.gpg && \
+    chmod a+r /etc/apt/keyrings/docker.gpg
+
+# Dockerリポジトリの追加
+RUN echo \
+  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
+  $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
+
+# Docker のインストール
+RUN apt-get update && apt-get install -y \
+    #docker-ce \
+    docker-ce-cli \
+    #containerd.io \
+    #docker-buildx-plugin \
+    docker-compose-plugin
+    # && usermod -aG docker appuser && \
+
+# AWS CLI のインストール
+
+RUN apt-get update && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-aarch64.zip" -o "awscliv2.zip" && \
+    unzip awscliv2.zip && \
+    ./aws/install && \
+    rm -rf aws awscliv2.zip
+
+# その他の設定
+RUN npm install -g pm2 pnpm@10.7.1 \
+    && pnpm config set script-shell /bin/bash \
+    && (echo 'appuser ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers) \
+    && (echo 'eval "$(direnv hook bash)"' >> ~/.bashrc)
+
+# Playwright(E2E)のブラウザ本体と OS 依存(libnspr4 等)をイメージに焼き込む。
+# system 依存を apt で入れただけだとルート FS 上に載るため、コンテナ再作成で失われる
+# (ブラウザ本体は ~/.cache だが /home/appuser は永続ボリュームでマウント時にシャドウ
+# されるため、ここではボリューム外の PLAYWRIGHT_BROWSERS_PATH に置いて両方をイメージに固定する)。
+# バージョンはルート package.json の @playwright/test に合わせる(ズレると実行時に
+# ブラウザ未検出で明示エラーになる。バンプ時はこの pin も更新すること)。
+ENV PLAYWRIGHT_BROWSERS_PATH=/ms-playwright
+RUN apt-get update && npx --yes playwright@1.61.1 install --with-deps chromium \
+    && chmod -R a+rX /ms-playwright
+
+ENV TZ=Asia/Tokyo
+ENV LANG=ja_JP.UTF-8
+ENV LC_MESSAGES=C
+ENV LC_TIME=C
+
+# 作業コピーは home volume 上の ~/app(コンテナ内 clone 方式、docs/dev-container.md 参照)。
+# 旧 /app symlink は 1-12 の位置非依存化(repoRoot() ヘルパー)により撤去済み
+
+WORKDIR /home/appuser/app
+USER appuser
+
+# このコピーは onstart-local.sh からも毎回実行される
+COPY --chown=appuser:appuser docker/home-appuser-local/ /home/appuser/
+
+# Claude Code
+RUN curl -fsSL https://claude.ai/install.sh | bash

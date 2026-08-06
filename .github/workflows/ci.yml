@@ -1,0 +1,161 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # `pnpm verify` の各段階を並列ジョブに分割する。
+  #
+  # ジョブごとに個別のコマンドを書かず matrix の値をそのまま `pnpm ${{ matrix.stage }}`
+  # に渡すことで、「e2e ジョブだけ微妙に違うことをしている」というずれを構造的に防ぐ。
+  #
+  # **matrix.stage は package.json の `scripts.verify` と完全に一致していなければならない。**
+  # 一致は backend/test/integration/framework/ciStages.test.ts が検証している
+  # (= この test ジョブ自身が CI の定義を検証する)。段階を足すときは両方を直すこと。
+  verify:
+    name: verify (${{ matrix.stage }})
+    runs-on: ubuntu-latest
+    strategy:
+      # 1 つ落ちても他の結果を見たい(切り分けのため)
+      fail-fast: false
+      matrix:
+        stage: [check, lint, test, e2e]
+    env:
+      TZ: Asia/Tokyo
+      DB_URL: postgresql://appuser:testpass@localhost/myapp?connection_limit=20
+      IS_LOCAL_DEVELOPMENT: 'true'
+      SPA_APP_BASE_URL: http://localhost:8890
+      API_SERVER_BASE_URL: http://localhost:8080
+      VITE_API_SERVER_BASE_URL: http://localhost:8080
+      # オブジェクトストレージ(実体は e2e ジョブでだけ起動する MinIO)。
+      # 統合テストは storage をフェイクに差し替えるのでこの値を使わないが、
+      # 環境変数はジョブ単位でしか定義できないので全段階に置いている
+      S3_BUCKET: myapp-ci
+      S3_ENDPOINT: http://localhost:9000
+      # CI は minio も chromium も同じランナー上にあるので、presigned URL の
+      # ホスト名は S3_ENDPOINT と同じでよい。playwright.config.ts の既定
+      # (開発コンテナ向けの miniohost)を上書きするために明示する。
+      # 変数名を S3_PUBLIC_ENDPOINT と分けているのは、開発コンテナ側の値を
+      # E2E が誤って継承しないため(playwright.config.ts のコメント参照)
+      E2E_S3_PUBLIC_ENDPOINT: http://localhost:9000
+      S3_FORCE_PATH_STYLE: 'true'
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_DEFAULT_REGION: ap-northeast-1
+    services:
+      # services は matrix の値で出し分けられないため全ジョブで起動する。
+      # check / lint には不要(約 17 秒の無駄)だが、臨界パスは test ジョブなので
+      # 壁時計には影響しない
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: appuser
+          POSTGRES_PASSWORD: testpass
+          POSTGRES_DB: myapp
+          TZ: Asia/Tokyo
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U appuser"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # 生成物(schema.prisma.generated / src/generated/prisma)はコミット運用。
+      # 再生成して差分が出ないこと = 生成物がスキーマと同期していることを検証する。
+      # `pnpm verify` に含まれない CI 専用のチェックなので、1 ジョブでだけ実行する
+      - name: Verify generated Prisma artifacts are up to date
+        if: matrix.stage == 'check'
+        run: |
+          pnpm db:generate
+          git diff --exit-code -- prisma/schema.prisma.generated src/generated/prisma
+        working-directory: backend
+      # config.ts は SSM パラメータを要求するため、CI ではダミーのキャッシュを置く
+      # (IS_LOCAL_DEVELOPMENT=true のとき ~/.ssm-keys.json が SSM の代わりに読まれる)
+      - name: Write dummy SSM cache
+        run: |
+          cat > ~/.ssm-keys.json <<'EOF'
+          {
+            "/myapp-keys/COOKIE_SECRET": "ci-dummy-cookie-secret",
+            "/myapp-keys/CRYPTO_SECRET": "00112233445566778899aabbccddeeff",
+            "/myapp-keys/SES_SMTP_USER": "ci-dummy",
+            "/myapp-keys/SES_SMTP_PASS": "ci-dummy",
+            "/myapp-keys/MASTER_SECRET": "JBSWY3DPEHPK3PXP",
+            "/myapp-keys/MASTER_IP_WHITELIST": "192.0.2.1"
+          }
+          EOF
+      # OpenAPI 型もコミット運用の生成物。Prisma と同じく「再生成して差分ゼロ」を検証する。
+      # ルートのスキーマを変えて `pnpm gen:openapi` を忘れると、古い型のままフロントの
+      # 型チェックが通ってしまうため。SSM のダミーキャッシュを要求するのでその後に置く。
+      # `gen:openapi` は script/generate_openapi.ts が swagger を自前で register するので
+      # NODE_ENV に依存しない(ADR 20260804-agent-docs-structure.md 系の条件とは無関係)
+      - name: Verify generated OpenAPI types are up to date
+        if: matrix.stage == 'check'
+        # ENABLE_DEBUG_MODE が必須。app.ts の autoload が
+        # `ignorePattern: ENABLE_DEBUG_MODE ? undefined : /debug/` で
+        # デバッグルートを出し分けているため、未設定だと生成物から /api/debug/* が丸ごと
+        # 落ちて差分になる。開発コンテナは docker-compose.local.yml で true にしており、
+        # コミット済みの型もデバッグルート込み(フロントの pages/debug/* がその型を使う)。
+        # ここだけに設定する: ジョブ全体に効かせると test ジョブの前提まで変わる
+        env:
+          ENABLE_DEBUG_MODE: 'true'
+        run: |
+          pnpm gen:openapi
+          git diff --exit-code -- ../frontend/src/generated
+        working-directory: backend
+      # Playwright のブラウザ本体(約 30 秒のダウンロード)をキャッシュする。
+      # 必要なのは e2e ジョブだけなので、他の段階では丸ごと飛ばす。
+      # キーは pnpm-lock.yaml ではなく解決後の playwright のバージョンにする。
+      # lock を鍵にすると無関係な依存の更新でもブラウザを取り直すことになるため
+      - name: Resolve Playwright version
+        if: matrix.stage == 'e2e'
+        id: playwright-version
+        run: |
+          echo "version=$(pnpm exec playwright --version | awk '{print $2}')" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@v6
+        if: matrix.stage == 'e2e'
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ runner.os }}-playwright-${{ steps.playwright-version.outputs.version }}
+      # キャッシュミス時のみ実行する。--with-deps で OS 依存も入れる。
+      # ヒット時は何もしない: ubuntu-latest には Chromium の共有ライブラリが
+      # 揃っているため install-deps は 13 秒かけて何もインストールしていなかった(実測)。
+      # ランナーイメージ側から依存が消えた場合は E2E が
+      # 「共有ライブラリが見つからない」で明確に落ちるので、そのとき戻す
+      - if: matrix.stage == 'e2e' && steps.playwright-cache.outputs.cache-hit != 'true'
+        run: pnpm exec playwright install --with-deps chromium
+      # MinIO は e2e ジョブでだけ要る(統合テストは storage をフェイクに差し替えるため)。
+      # postgres のように services: で書けない: minio のイメージは `server /data` という
+      # コマンド引数を要求するが、services: は image / env / ports / options しか渡せず
+      # コマンドを差せない。そのため docker run で明示的に起動する
+      - name: Start MinIO
+        if: matrix.stage == 'e2e'
+        run: |
+          docker run -d --name minio -p 9000:9000 \
+            -e MINIO_ROOT_USER=minioadmin \
+            -e MINIO_ROOT_PASSWORD=minioadmin \
+            minio/minio:latest server /data
+          for _ in $(seq 1 60); do
+            if curl -sf http://localhost:9000/minio/health/live > /dev/null; then
+              break
+            fi
+            sleep 1
+          done
+          curl -sf http://localhost:9000/minio/health/live > /dev/null
+          # バケットは起動時に作る(ローカルは compose の minio-init が同じことをする)
+          aws --endpoint-url http://localhost:9000 s3 mb "s3://$S3_BUCKET"
+      - run: pnpm ${{ matrix.stage }}

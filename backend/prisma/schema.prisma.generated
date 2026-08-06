@@ -1,0 +1,234 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ログイン情報
+
+model LoginSession {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  sessionId String @map("session_id") @db.VarChar(255)
+  deviceId  String @map("device_id") @db.VarChar(255)
+  loginIp   String @map("login_ip") @db.VarChar(255)
+  userAgent String @map("user_agent") @db.VarChar(255)
+
+  tenantId String @map("tenant_id") @db.Uuid
+  tenant   Tenant @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  lastActiveAt DateTime @default(now()) @map("last_active_at") @db.Timestamptz(3)
+
+  @@unique([sessionId])
+  @@unique([deviceId])
+  @@map("login_sessions")
+}
+
+// テナント
+
+model Tenant {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  tenantName     String @map("tenant_name") @db.VarChar(255)
+  tenantCode     String @map("tenant_code") @db.VarChar(255)
+  sourceIpRange  String @default("0.0.0.0/0") @map("source_ip_range") @db.VarChar(255)
+  configurations Json   @default("{}") @db.JsonB
+
+  users                 User[]
+  dateExamples          DateExample[]
+  editLock              EditLock[]
+  loginSessions         LoginSession[]
+  debugParameters       DebugParameter[]
+  passwordResetRequests PasswordResetRequest[]
+  reports               Report[]
+  uploadedImages        UploadedImage[]
+
+  @@unique([tenantName])
+  @@unique([tenantCode])
+  @@map("tenants")
+}
+
+// ユーザ
+
+enum Role {
+  ADMIN
+  MEMBER
+
+  @@map("roles")
+}
+
+model User {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  userName String @map("user_name") @db.VarChar(255)
+  role     Role
+
+  isDisabled Boolean @default(false) @map("is_disabled")
+
+  loginId      String @map("login_id") @db.VarChar(255)
+  passwordHash String @map("password_hash") @db.VarChar(255)
+  email        String @db.VarChar(255)
+
+  passwordChangedAt DateTime? @map("password_changed_at") @db.Timestamptz(3)
+  lastLoginAt       DateTime? @map("last_login_at") @db.Timestamptz(3)
+
+  loginSessions         LoginSession[]
+  passwordResetRequests PasswordResetRequest[]
+  reports               Report[]
+  uploadedImages        UploadedImage[]
+
+  @@unique([tenantId, loginId])
+  @@map("users")
+}
+
+// 排他制御用ロック
+
+model EditLock {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  lockName String   @map("lock_name") @db.VarChar(255)
+  lockedAt DateTime @map("locked_at") @db.Timestamptz(3) // 更新かけられればなんでもよかったがとりあえず
+
+  @@unique([tenantId, lockName])
+  @@map("edit_locks")
+}
+
+// パスワードリセット申請
+
+model PasswordResetRequest {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  requestedAt DateTime @map("requested_at") @db.Timestamptz(3)
+  lastSentAt  DateTime @map("last_sent_at") @db.Timestamptz(3)
+  authCode    String   @map("auth_code") @db.VarChar(6)
+
+  failCount Int @default(0) @map("fail_count")
+
+  @@unique([tenantId, userId])
+  @@map("password_reset_requests")
+}
+
+// @db.Date カラムの参照例
+//
+// date 型(TZ なし)カラムは「カラム名 date」のみ許可(起動時検証)で、
+// Prisma 拡張が JST の年月日を保って入出力を正規化する。
+// このモデルはその挙動のリグレッションテスト対象を兼ねる
+
+model DateExample {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  date DateTime @db.Date
+
+  @@unique([tenantId, date])
+  @@map("date_examples")
+}
+
+// デバッグパラメータ
+
+model DebugParameter {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  name  String @db.VarChar(255)
+  value String @db.VarChar(255)
+
+  @@unique([tenantId, name])
+  @@map("debug_parameters")
+}
+
+// 報告書とその添付画像。
+// ファイルアップロードの参照実装(ADR / 計画は docs/plans/20260805-s3-image-upload.md)。
+
+model Report {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  title   String @db.VarChar(255)
+  comment String @db.Text
+
+  uploadedImages UploadedImage[]
+
+  // 一覧は tenantId(ADMIN)または tenantId + userId(MEMBER)で引き、作成日時の降順で並べる
+  @@index([tenantId, userId, createdAt])
+  @@index([tenantId, createdAt])
+  @@map("reports")
+}
+
+model UploadedImage {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  userId String @map("user_id") @db.Uuid
+  user   User   @relation(fields: [userId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // null = 仮アップロード(プレビュー中)、非 null = 報告書に確定済み。
+  // 確定状態はこの 1 本だけで表す(confirmedAt のような second source of truth を作らない)
+  reportId String? @map("report_id") @db.Uuid
+  report   Report? @relation(fields: [reportId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  // S3 のキー。パスにテナントを含めない(アップロード時点で tenantId が
+  // 確定しないユーザがありうるため)。判断は docs/plans/20260805-s3-image-upload.md
+  //
+  // 値は id から決まるので導出もできるが、あえてカラムに持つ。**外部システムに
+  // 対して実際に行った副作用の記録**であり、導出関数を変えても S3 上の実体は
+  // 変わらないため。派生プロジェクトがパス規則を変えても(例: 上記の判断を覆して
+  // tenantId を入れる)、既存行は自分のキーを持っているので読めなくならない。
+  // この「INSERT 時点でキーが確定していること」が、uploadedImages.POST.ts で
+  // id を先に採番している理由になっている
+  storageKey   String @map("storage_key") @db.VarChar(255)
+  thumbnailKey String @map("thumbnail_key") @db.VarChar(255)
+
+  mimeType String @map("mime_type") @db.VarChar(255)
+  byteSize Int    @map("byte_size")
+  width    Int
+  height   Int
+
+  // 画像本体からは EXIF を除去するが、記録としてはここに残す
+  rawExif Json @map("raw_exif")
+
+  @@index([tenantId, reportId])
+  // 仮アップロードの 3 日タイムアウト削除で引く
+  @@index([tenantId, createdAt])
+  @@map("uploaded_images")
+}

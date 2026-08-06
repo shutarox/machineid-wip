@@ -1,0 +1,127 @@
+# Mac でのローカル開発用
+
+name: myapp
+
+services:
+  dev-local:
+    # イメージ名とコンテナ名は**プロジェクトごとに変える**。派生プロジェクトと
+    # 同時に動かすとき、同じタグでビルドするとイメージを上書きし合うため。
+    # コンテナ名は container_name を書かず compose の既定
+    # (`<name>-<サービス名>-<連番>`)に任せる = 先頭の `name:` を変えるだけで揃う
+    image: 'myapp-dev-local:latest'
+    hostname: devhost
+
+    # privileged: true
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.local
+      args:
+        APP_GID: ${APP_GID:-2000}
+        APP_UID: ${APP_UID:-2000}
+    environment:
+      # local 以外では、ECS の container definition に環境変数として登録される
+      - NODE_ENV=development
+      - SERVER_ENV=local
+      - DB_HOST=pghost
+      - ENABLE_DEBUG_MODE=true
+      - SPA_APP_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8801
+      - API_SERVER_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8081
+      # terraform 実行環境特有の環境変数
+      - TF_VAR_AWS_ENV=dev
+      # vite 環境特有の環境変数 (API_SERVER_BASE_URL と同じ)
+      - VITE_API_SERVER_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8081
+      - VITE_ENABLE_DEBUG_MODE=true
+      # ローカル以外では secret 扱いで渡される環境変数
+      # DB_URL はここでは注入しない: pnpm bootstrap が clone ごとに .envrc(direnv)を
+      # 生成し、DB をコピーごとに分離する(docs/dev-container.md 参照)
+      - DB_PASSWORD=testpass
+      # オブジェクトストレージ。ローカルは MinIO を S3 の代わりに使う。
+      # 本番は S3_ENDPOINT / S3_FORCE_PATH_STYLE を設定せず SDK の既定に任せる
+      - S3_BUCKET=myapp-local
+      - S3_ENDPOINT=http://miniohost:9000
+      # presigned URL を開くのは**ホストのブラウザ**なので、docker ネットワーク内でしか
+      # 解決できない miniohost では見えない。URL のホスト名を後から差し替えるのは不可
+      # (SigV4 が Host ごと署名するため 403)。発行時点でホスト公開ポートを使う
+      - S3_PUBLIC_ENDPOINT=http://localhost:9000
+      - S3_FORCE_PATH_STYLE=true
+      - AWS_ACCESS_KEY_ID=minioadmin
+      - AWS_SECRET_ACCESS_KEY=minioadmin
+      - AWS_DEFAULT_REGION=ap-northeast-1
+      # local 実行環境特有の設定
+      - IS_LOCAL_DEVELOPMENT=true
+      # AWS_PROFILE はここでは設定しない。設定すると AWS SDK の資格情報チェーンが
+      # プロファイルを優先し、上の AWS_ACCESS_KEY_ID(MinIO 用)が無視される。
+      # terraform は各環境の .envrc が、deploy スクリプトは自前で export するので、
+      # コンテナ全体に設定する必要はない
+      - SLACK_NOTICE_WEBHOOK_URL=https://hooks.slack.com/services/***/***/***
+    volumes:
+      # ホスト clone は compose 操作・イメージビルド・受け渡し(git remote "host")専用。
+      # 作業コピーは home volume 上の ~/app(コンテナ内 clone 方式、docs/dev-container.md 参照)
+      - ../:/host/app
+      # HOME はコンテナ再作成をまたいで永続化する。作業コピー(~/app)・pnpm store・
+      # claude のセッション・認証情報(~/.claude)・SSH 鍵をすべてこの volume に収容する
+      - home_appuser:/home/appuser
+      # ホストの Docker デーモンを使用する
+      - /var/run/docker.sock:/var/run/docker.sock
+    ports:
+      - 8081:8080
+      - 8801:8800
+    user: appuser
+    working_dir: /home/appuser/app
+    tty: true
+    # onstart はホスト clone のものを実行する: onstart 自体の変更が
+    # イメージ rebuild なし(docker-ops へ push → コンテナ再作成)で反映できる
+    entrypoint: bash /host/app/etc/onstart-local.sh
+
+  postgres:
+    hostname: pghost
+    image: postgres:18
+    environment:
+      - TZ=Asia/Tokyo
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    command: postgres -c timezone=Asia/Tokyo
+    volumes:
+      - postgres_data:/var/lib/postgresql
+      - ../etc/postgres/initdb.d:/docker-entrypoint-initdb.d
+
+  # S3 互換のオブジェクトストレージ。本番の S3 と同じ AWS SDK でアクセスできるので、
+  # ローカルと本番の差を「エンドポイントとパススタイルの指定だけ」に閉じ込められる
+  minio:
+    hostname: miniohost
+    image: minio/minio:latest
+    environment:
+      - MINIO_ROOT_USER=minioadmin
+      - MINIO_ROOT_PASSWORD=minioadmin
+      - TZ=Asia/Tokyo
+    command: server /data --console-address ":9001"
+    ports:
+      # 9000 は S3 API。**ホストのブラウザが presigned URL を開くのに要る**
+      # (dev-local の S3_PUBLIC_ENDPOINT がこのポートを指す)
+      - 9000:9000
+      # 9001 は Web コンソール(ブラウザで中身を確認できる)
+      - 9001:9001
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ['CMD', 'mc', 'ready', 'local']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # バケットを作って終了する使い捨てコンテナ(冪等)
+  minio-init:
+    image: minio/mc:latest
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      sh -c "
+      mc alias set local http://miniohost:9000 minioadmin minioadmin &&
+      mc mb --ignore-existing local/myapp-local &&
+      echo 'bucket ready'
+      "
+
+volumes:
+  postgres_data:
+  home_appuser:
+  minio_data:
