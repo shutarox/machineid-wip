@@ -24,12 +24,12 @@ services:
       - SERVER_ENV=local
       - DB_HOST=pghost
       - ENABLE_DEBUG_MODE=true
-      - SPA_APP_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8801
-      - API_SERVER_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8081
+      - SPA_APP_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8802
+      - API_SERVER_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8082
       # terraform 実行環境特有の環境変数
       - TF_VAR_AWS_ENV=dev
       # vite 環境特有の環境変数 (API_SERVER_BASE_URL と同じ)
-      - VITE_API_SERVER_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8081
+      - VITE_API_SERVER_BASE_URL=http://${DEV_SERVER_ADDR:-localhost}:8082
       - VITE_ENABLE_DEBUG_MODE=true
       # ローカル以外では secret 扱いで渡される環境変数
       # DB_URL はここでは注入しない: pnpm bootstrap が clone ごとに .envrc(direnv)を
