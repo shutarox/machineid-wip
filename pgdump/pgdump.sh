@@ -11,8 +11,8 @@ set -euo pipefail
 # 日付と時刻を取得して変数に格納
 DATE=$(date +"%Y%m%d_%H%M%S")
 FILE_BASE_NAME="full.${DATE}"
-# bootstrap は clone ごとに DB 名を変える(myapp / myapp_app2 ...)ので上書きできるようにする
-DB_NAME="${DB_NAME:-myapp}"
+# bootstrap は clone ごとに DB 名を変える(machineid / machineid_app2 ...)ので上書きできるようにする
+DB_NAME="${DB_NAME:-machineid}"
 
 SECTIONS=(pre-data data post-data)
 

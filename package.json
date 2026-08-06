@@ -1,5 +1,5 @@
 {
-  "name": "myapp",
+  "name": "machineid",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.7.1",

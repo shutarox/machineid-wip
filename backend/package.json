@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "format": "prettier --write \"src/**/*.{ts,js,json}\" --ignore-path ../.prettierignore",
     "stop": "pm2 delete ${PM2_BACKEND_NAME:-backend}",
-    "logtail": "AWS_PROFILE=myapp-prod-tf-user-main unbuffer aws logs tail '/ecs/prod-main-ecs-task-family-main' --follow | unbuffer -p grep -o '{.*' | jq --unbuffered",
+    "logtail": "AWS_PROFILE=machineid-prod-tf-user-main unbuffer aws logs tail '/ecs/prod-main-ecs-task-family-main' --follow | unbuffer -p grep -o '{.*' | jq --unbuffered",
     "build": "pnpm install --ignore-scripts && tsc -p tsconfig.json && tsc-alias",
     "confirm": "bash -c 'read -p \"Are you sure? [y/N] \" ans; [ \"$ans\" = \"y\" ] || exit 1' #internal",
     "db:case-format": "cp prisma/schema.prisma prisma/schema.prisma.generated && prisma-case-format -c prisma/prisma-case-format --file prisma/schema.prisma.generated #internal",

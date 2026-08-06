@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 
 const baseUrl = new URL(
   process.env.DB_URL ??
-    'postgresql://appuser:testpass@pghost/myapp?connection_limit=20'
+    'postgresql://appuser:testpass@pghost/machineid?connection_limit=20'
 );
 
 export const baseDbName = baseUrl.pathname.replace(/^\//, '');

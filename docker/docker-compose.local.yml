@@ -1,6 +1,6 @@
 # Mac でのローカル開発用
 
-name: myapp
+name: machineid
 
 services:
   dev-local:
@@ -8,7 +8,7 @@ services:
     # 同時に動かすとき、同じタグでビルドするとイメージを上書きし合うため。
     # コンテナ名は container_name を書かず compose の既定
     # (`<name>-<サービス名>-<連番>`)に任せる = 先頭の `name:` を変えるだけで揃う
-    image: 'myapp-dev-local:latest'
+    image: 'machineid-dev-local:latest'
     hostname: devhost
 
     # privileged: true
@@ -37,12 +37,12 @@ services:
       - DB_PASSWORD=testpass
       # オブジェクトストレージ。ローカルは MinIO を S3 の代わりに使う。
       # 本番は S3_ENDPOINT / S3_FORCE_PATH_STYLE を設定せず SDK の既定に任せる
-      - S3_BUCKET=myapp-local
+      - S3_BUCKET=machineid-local
       - S3_ENDPOINT=http://miniohost:9000
       # presigned URL を開くのは**ホストのブラウザ**なので、docker ネットワーク内でしか
       # 解決できない miniohost では見えない。URL のホスト名を後から差し替えるのは不可
       # (SigV4 が Host ごと署名するため 403)。発行時点でホスト公開ポートを使う
-      - S3_PUBLIC_ENDPOINT=http://localhost:9000
+      - S3_PUBLIC_ENDPOINT=http://localhost:9002
       - S3_FORCE_PATH_STYLE=true
       - AWS_ACCESS_KEY_ID=minioadmin
       - AWS_SECRET_ACCESS_KEY=minioadmin
@@ -64,8 +64,8 @@ services:
       # ホストの Docker デーモンを使用する
       - /var/run/docker.sock:/var/run/docker.sock
     ports:
-      - 8081:8080
-      - 8801:8800
+      - 8082:8080
+      - 8802:8800
     user: appuser
     working_dir: /home/appuser/app
     tty: true
@@ -97,9 +97,9 @@ services:
     ports:
       # 9000 は S3 API。**ホストのブラウザが presigned URL を開くのに要る**
       # (dev-local の S3_PUBLIC_ENDPOINT がこのポートを指す)
-      - 9000:9000
+      - 9002:9000
       # 9001 は Web コンソール(ブラウザで中身を確認できる)
-      - 9001:9001
+      - 9003:9001
     volumes:
       - minio_data:/data
     healthcheck:
@@ -117,7 +117,7 @@ services:
     entrypoint: >
       sh -c "
       mc alias set local http://miniohost:9000 minioadmin minioadmin &&
-      mc mb --ignore-existing local/myapp-local &&
+      mc mb --ignore-existing local/machineid-local &&
       echo 'bucket ready'
       "
 

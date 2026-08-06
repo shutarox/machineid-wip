@@ -4,8 +4,8 @@
 -- appuser を作成
 CREATE USER appuser WITH PASSWORD 'testpass' CREATEDB;
 
--- myapp データベースを作成
-CREATE DATABASE myapp OWNER appuser;
+-- machineid データベースを作成
+CREATE DATABASE machineid OWNER appuser;
 
 -- タイムゾーン設定（docker-compose の command でも設定しているが念のため）
-ALTER DATABASE myapp SET timezone TO 'Asia/Tokyo';
+ALTER DATABASE machineid SET timezone TO 'Asia/Tokyo';

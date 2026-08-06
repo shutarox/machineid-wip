@@ -58,7 +58,7 @@ export const CommonHeader: React.FC = () => {
 
   const matches = Router.useMatches() as TitleHandleMatch[];
   const currentTitle =
-    matches.find((match) => match.handle?.title)?.handle?.title ?? 'MyApp';
+    matches.find((match) => match.handle?.title)?.handle?.title ?? 'MachineId';
 
   const logoutMutation = $api.useMutation('post', '/api/private/logout', {
     onSuccess: () => {

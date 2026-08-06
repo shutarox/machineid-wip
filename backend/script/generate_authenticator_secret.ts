@@ -7,8 +7,8 @@ import { randomBytes } from 'node:crypto';
 import * as OTPAuth from 'otpauth';
 import QRCode from 'qrcode';
 
-const name = 'myapp';
-const issuer = 'myapp';
+const name = 'machineid';
+const issuer = 'machineid';
 
 const secret = new OTPAuth.Secret({ buffer: randomBytes(32).buffer });
 

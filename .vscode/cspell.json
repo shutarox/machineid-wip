@@ -3,8 +3,8 @@
   "language": "en",
   "words": [
     // config / product
-    "myappdomain",
-    "myapp",
+    "machineiddomain",
+    "machineid",
     "appuser",
     // system
     "lintrc",

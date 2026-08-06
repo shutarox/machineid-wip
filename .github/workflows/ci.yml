@@ -28,7 +28,7 @@ jobs:
         stage: [check, lint, test, e2e]
     env:
       TZ: Asia/Tokyo
-      DB_URL: postgresql://appuser:testpass@localhost/myapp?connection_limit=20
+      DB_URL: postgresql://appuser:testpass@localhost/machineid?connection_limit=20
       IS_LOCAL_DEVELOPMENT: 'true'
       SPA_APP_BASE_URL: http://localhost:8890
       API_SERVER_BASE_URL: http://localhost:8080
@@ -36,7 +36,7 @@ jobs:
       # オブジェクトストレージ(実体は e2e ジョブでだけ起動する MinIO)。
       # 統合テストは storage をフェイクに差し替えるのでこの値を使わないが、
       # 環境変数はジョブ単位でしか定義できないので全段階に置いている
-      S3_BUCKET: myapp-ci
+      S3_BUCKET: machineid-ci
       S3_ENDPOINT: http://localhost:9000
       # CI は minio も chromium も同じランナー上にあるので、presigned URL の
       # ホスト名は S3_ENDPOINT と同じでよい。playwright.config.ts の既定
@@ -57,7 +57,7 @@ jobs:
         env:
           POSTGRES_USER: appuser
           POSTGRES_PASSWORD: testpass
-          POSTGRES_DB: myapp
+          POSTGRES_DB: machineid
           TZ: Asia/Tokyo
         ports:
           - 5432:5432
@@ -89,12 +89,12 @@ jobs:
         run: |
           cat > ~/.ssm-keys.json <<'EOF'
           {
-            "/myapp-keys/COOKIE_SECRET": "ci-dummy-cookie-secret",
-            "/myapp-keys/CRYPTO_SECRET": "00112233445566778899aabbccddeeff",
-            "/myapp-keys/SES_SMTP_USER": "ci-dummy",
-            "/myapp-keys/SES_SMTP_PASS": "ci-dummy",
-            "/myapp-keys/MASTER_SECRET": "JBSWY3DPEHPK3PXP",
-            "/myapp-keys/MASTER_IP_WHITELIST": "192.0.2.1"
+            "/machineid-keys/COOKIE_SECRET": "ci-dummy-cookie-secret",
+            "/machineid-keys/CRYPTO_SECRET": "00112233445566778899aabbccddeeff",
+            "/machineid-keys/SES_SMTP_USER": "ci-dummy",
+            "/machineid-keys/SES_SMTP_PASS": "ci-dummy",
+            "/machineid-keys/MASTER_SECRET": "JBSWY3DPEHPK3PXP",
+            "/machineid-keys/MASTER_IP_WHITELIST": "192.0.2.1"
           }
           EOF
       # OpenAPI 型もコミット運用の生成物。Prisma と同じく「再生成して差分ゼロ」を検証する。

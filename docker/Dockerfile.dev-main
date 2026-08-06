@@ -1,5 +1,5 @@
-# image: myapp-stg:latest
-# build: docker build -f ./Dockerfile.stg -t myapp-stg:latest .
+# image: machineid-stg:latest
+# build: docker build -f ./Dockerfile.stg -t machineid-stg:latest .
 
 
 FROM node:24.14.0-slim AS node

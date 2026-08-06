@@ -80,7 +80,7 @@ export const ENABLE_DEBUG_MODE = process.env.ENABLE_DEBUG_MODE === 'true';
 // SSM パラメータの名前空間。案件ごとに環境変数 SSM_KEY_PREFIX で差し替える
 // (末尾の / は付けても付けなくてもよい)。ローカル / CI では ~/.ssm-keys.json の
 // キーがこのプレフィックスと一致している必要がある
-const SSM_KEY_PREFIX = `${(process.env.SSM_KEY_PREFIX ?? '/myapp-keys').replace(/\/+$/, '')}/`;
+const SSM_KEY_PREFIX = `${(process.env.SSM_KEY_PREFIX ?? '/machineid-keys').replace(/\/+$/, '')}/`;
 
 const SSM_KEY_NAMES = [
   'COOKIE_SECRET',
@@ -158,8 +158,7 @@ export const S3_ENDPOINT = process.env.S3_ENDPOINT || undefined;
  * - CI: 未設定。minio も chromium も同じランナー上なので `S3_ENDPOINT` と同じでよい
  * - 本番(実 S3): 両方とも未設定
  */
-export const S3_PUBLIC_ENDPOINT =
-  process.env.S3_PUBLIC_ENDPOINT || S3_ENDPOINT;
+export const S3_PUBLIC_ENDPOINT = process.env.S3_PUBLIC_ENDPOINT || S3_ENDPOINT;
 
 /**
  * パススタイル(`http://host/bucket/key`)を強制するか。

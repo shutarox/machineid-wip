@@ -1,6 +1,6 @@
 {
-  "name": "MyApp",
-  "short_name": "MyApp",
+  "name": "MachineId",
+  "short_name": "MachineId",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",

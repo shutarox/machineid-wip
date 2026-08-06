@@ -6,9 +6,9 @@
 // PG コンテナは共有し、database をコピーごとに分離する。
 //
 // 導出規則:
-//   - ディレクトリ名 'app'(主クローン)→ DB 'myapp'、ポート 8080/8800、PM2 名 backend/frontend
-//   - 'app<N>' → DB 'myapp_app<N>'、ポート 8080+2N/8800+2N、PM2 名 backend-app<N>/frontend-app<N>
-//   - その他 → DB 'myapp_<名前>'、ポートは名前のハッシュから導出
+//   - ディレクトリ名 'app'(主クローン)→ DB 'machineid'、ポート 8080/8800、PM2 名 backend/frontend
+//   - 'app<N>' → DB 'machineid_app<N>'、ポート 8080+2N/8800+2N、PM2 名 backend-app<N>/frontend-app<N>
+//   - その他 → DB 'machineid_<名前>'、ポートは名前のハッシュから導出
 //
 // Usage: pnpm bootstrap   (リポジトリルートで実行)
 
@@ -18,7 +18,9 @@ import * as path from 'node:path';
 
 const root = process.cwd();
 if (!fs.existsSync(path.join(root, 'pnpm-workspace.yaml'))) {
-  console.error('リポジトリルート(pnpm-workspace.yaml のある場所)で実行してください');
+  console.error(
+    'リポジトリルート(pnpm-workspace.yaml のある場所)で実行してください'
+  );
   process.exit(1);
 }
 
@@ -32,10 +34,10 @@ const sanitized = dirName.toLowerCase().replace(/[^a-z0-9]/g, '_');
 let dbName;
 let offset;
 if (dirName === 'app') {
-  dbName = 'myapp';
+  dbName = 'machineid';
   offset = 0;
 } else {
-  dbName = `myapp_${sanitized}`;
+  dbName = `machineid_${sanitized}`;
   const numMatch = dirName.match(/(\d+)$/);
   if (numMatch) {
     offset = Number(numMatch[1]) * 2;
@@ -72,18 +74,31 @@ console.log('generated: .envrc');
 try {
   execFileSync('direnv', ['allow', root], { stdio: 'inherit' });
 } catch {
-  console.warn('direnv allow に失敗しました(手動で `direnv allow` を実行してください)');
+  console.warn(
+    'direnv allow に失敗しました(手動で `direnv allow` を実行してください)'
+  );
 }
 
 // ---- DB 作成(存在しなければ)
 
 const psqlEnv = { ...process.env, PGPASSWORD: DB_PASSWORD };
-const dbExists = execFileSync(
-  'psql',
-  ['-h', DB_HOST, '-U', DB_USER, '-d', 'postgres', '-tAc',
-    `SELECT 1 FROM pg_database WHERE datname = '${dbName}'`],
-  { env: psqlEnv }
-).toString().trim() === '1';
+const dbExists =
+  execFileSync(
+    'psql',
+    [
+      '-h',
+      DB_HOST,
+      '-U',
+      DB_USER,
+      '-d',
+      'postgres',
+      '-tAc',
+      `SELECT 1 FROM pg_database WHERE datname = '${dbName}'`,
+    ],
+    { env: psqlEnv }
+  )
+    .toString()
+    .trim() === '1';
 
 if (dbExists) {
   console.log(`database '${dbName}' は既に存在します`);
@@ -106,11 +121,15 @@ execFileSync('pnpm', ['db:migrate:deploy'], {
   stdio: 'inherit',
 });
 
-execFileSync('pnpm', ['exec', 'tsx', '-r', 'tsconfig-paths/register', 'script/seed.ts'], {
-  cwd: backendDir,
-  env: childEnv,
-  stdio: 'inherit',
-});
+execFileSync(
+  'pnpm',
+  ['exec', 'tsx', '-r', 'tsconfig-paths/register', 'script/seed.ts'],
+  {
+    cwd: backendDir,
+    env: childEnv,
+    stdio: 'inherit',
+  }
+);
 
 // 開発用サンプルデータ(一覧・検索・ページネーション・テナント分離を画面で確認するため)。
 // パスワードが `pass` + loginId の推測可能なアカウントを作るので、
@@ -124,4 +143,6 @@ execFileSync(
 );
 
 console.log('');
-console.log('bootstrap 完了。新しいシェルを開くか `direnv reload` で環境変数が反映されます');
+console.log(
+  'bootstrap 完了。新しいシェルを開くか `direnv reload` で環境変数が反映されます'
+);
