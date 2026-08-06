@@ -119,11 +119,187 @@ aws_cloudfront_distribution.apex + function (apex → www リダイレクト)
 
 **静的アクセスキーを 1 本も作らない**方針(ADR の決定 6)なので、terraform を書き始める前に認証を用意する。
 
-1. AWS アカウントで **IAM Identity Center を有効化**(単体アカウントで使え、追加費用なし)
-2. 管理者権限のパーミッションセットを作り、自分に割り当てる
-3. 開発コンテナで `aws configure sso`
-   - コンテナ内にはブラウザが無いので、**device code フローで表示される URL とコードをホストのブラウザで開く**(`aws sso login --no-browser`)
-4. 各スタックの `.envrc` に `export AWS_PROFILE=<sso プロファイル名>` を書く
+**terraform とは独立していて、ドメインや tfstate バケットの決定を待たずに実施できる。** 既存の IAM ユーザー / アクセスキーには影響しない。
+
+事前に確認すること:
+
+- **アカウントが Organization のメンバーかどうか。** インスタンスには**組織インスタンス**と**アカウントインスタンス**の 2 種類があり、**目的を果たせるのは組織インスタンスだけ**(下表)。組織インスタンスは**管理アカウントでのみ**作成でき、組織に 1 つだけ
+- **リージョンは慎重に選ぶ。** 組織インスタンスは有効化したリージョンに置かれる(**追加リージョンへの複製は可能**)。**`ap-northeast-1` を選ぶ**。組織に既存のインスタンスがあれば**そのリージョンが優先**される
+
+#### インスタンス種別の違い(AWS 公式の比較表より・2026-08-06 確認)
+
+| 機能 | 組織インスタンス(管理アカウント) | アカウントインスタンス(メンバー / 単体) |
+|---|---|---|
+| 組織内の数 | **1 つだけ** | **複数可** |
+| **Multi-account permissions** | **Yes** | **No** |
+| **AWS アカウントへの SSO(access portal)** | **Yes** | **No** |
+| AWS 管理アプリケーションへの SSO | Yes | Yes |
+| SAML 2.0 のカスタムアプリ | Yes | No |
+| 委任管理者 | Yes | No |
+| 追加リージョンへの複製 | Yes | No |
+
+**コンソールの「アカウント固有の限定使用のみの場合は [有効化] を選択」という案内に釣られないこと。** これは「このアカウント内の **AWS 管理アプリケーション**向けなら」という意味で、**AWS アカウントそのものへの SSO ログインはできない**。IAM ユーザーを廃す目的には使えない。
+- **ID の出どころ。** 組織が Google Workspace を使っているため外部 IdP 連携(SAML + SCIM)も可能だが、**運用者 1 名の PoC では内蔵 ID ストアで十分**。後から切り替えられる
+
+#### 0-a. 先に開発コンテナの資格情報の混線を直す(これをやらないと AWS CLI が一切通らない)
+
+`docker-compose.local.yml` が MinIO 用に **`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をコンテナ全体の環境変数**として設定している。**環境変数は AWS の資格情報チェーンで `~/.aws` のプロファイルより優先される**ため、SSO プロファイルを作っても `minioadmin` が使われ続ける。
+
+```
+$ aws sts get-caller-identity
+InvalidClientTokenId: The security token included in the request is invalid.   ← 実測(2026-08-06)
+```
+
+**デプロイスクリプトの `aws ecr get-login-password` も同じ理由で失敗する。**
+
+- **当座の回避**: `unset AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY`
+- **根治**: `backend/src/libs/storage.ts` の `S3Client` に**ローカル時のみ明示的な fake 資格情報を渡す**(`IS_LOCAL_DEVELOPMENT` で分岐)。そのうえで compose から 2 つの環境変数を削除する。**本番はタスクロールなので既定チェーンのままでよい**
+- 雛形にも同じ問題があるため還元対象(`20260806-derive-first-project.md` の項目 8)
+
+#### 0-b. コンソールでの初期設定(人手が必要)
+
+**組織インスタンスの有効化には公開 API が無く、コンソール専用。** `aws sso-admin create-instance` が作るのは*アカウントインスタンス*で、AWS アカウントへのアクセス管理には使えないため代用にならない。また、最初の割り当てが無いと `aws configure sso` が選択先を持てないので、ここまでは人手で行う。
+
+> **実測(2026-08-06)**: メンバーアカウント側で有効化しようとして次のエラーになった。
+>
+> ```
+> The organization management account (394530725171) does not allow its members to create instances.
+> ```
+>
+> これは**アカウントインスタンス**の作成がブロックされたもの。メンバーアカウントから作れるのは
+> アカウントインスタンスだけで、それは AWS アカウントへのアクセス管理に使えないため、
+> **許可されていても解決しない**。**組織インスタンスを管理アカウントで有効化する**のが正しい。
+>
+> 手順は下記に読み替える:
+>
+> 1. **管理アカウント**にサインイン
+> 2. **既存の Identity Center が無いか先に確認**。組織インスタンスは組織に 1 つだけで、
+>    **既に別リージョンで有効ならそのリージョンを使うしかない**(「ap-northeast-1 を選ぶ」より優先)
+> 3. 無ければ有効化 → パーミッションセット作成 → **machineid 用のメンバーアカウントに対して**割り当て
+> 4. 有効化は**組織全体に効く**。共用 Organization なら、既存インスタンスに
+>    パーミッションセットを足すだけで済むことがある
+> 5. 有効化後は **委任管理者(delegated administrator)をメンバーアカウントに設定**し、
+>    日常の割り当て作業を管理アカウントから離す
+>
+> この場合 `aws configure sso` の `sso_account_id` には**メンバーアカウントの ID** が入る。
+
+1. リージョンを **`ap-northeast-1`** にして **IAM Identity Center を有効化**
+2. ユーザーを作る(自分)
+3. パーミッションセットを作る: **`AdministratorAccess`**(AWS 管理ポリシー)
+4. 「AWS アカウント」から **ユーザー × パーミッションセット**を対象アカウントに割り当てる
+5. **MFA を必須にする**(既定は登録を促すだけ。設定 → 認証 → MFA)
+   - プロンプトは AWS 既定の「コンテキスト対応」ではなく **「サインインごとに毎回」** を選ぶ。
+     既定が緩いのは*限定権限のユーザーが多数いる組織*を想定しているためで、
+     **ここは存在するユーザーが管理者 1 名**なので前提が違う。コンテキスト対応だと
+     「パスワード + 信頼済みブラウザ」で MFA を迂回できてしまう
+   - 摩擦を決めるのは MFA 設定より **SSO セッション長**(設定 → 認証、既定 8 時間)。
+     8 時間なら毎回でも実質 1 日 1 回。**煩わしければ MFA を緩めるのではなくセッションを伸ばす**
+   - MFA タイプの「**セキュリティキーと組み込みの認証ツール**」(WebAuthn / FIDO2)は**外さない**。
+     Mac の Touch ID がこれに当たり、**TOTP と違ってフィッシング耐性がある**(認証がオリジンに
+     紐づくため偽サイトが中継できない)。絞るなら逆に TOTP を外す方向
+   - ただし**管理者 1 名の間は 2 つ登録する**(日常: Touch ID / バックアップ: TOTP かセキュリティキー)。
+     Touch ID は端末に紐づくため、単独登録だと端末故障でロックアウトし、復旧がルートアカウント経由になる。
+     管理者が増えて MFA リセットの経路ができたら WebAuthn 専用に寄せる
+6. 次の 2 つを控える(`aws configure sso` で聞かれる)
+   - **AWS access portal URL**(`https://d-xxxxxxxxxx.awsapps.com/start`)
+   - **SSO region**(`ap-northeast-1`)
+
+#### 0-c. 開発コンテナから SSO ログイン
+
+```bash
+# 0-a が未対応の間は、AWS を叩く全コマンドで MinIO のダミーを外す必要がある。
+# シェル状態は残らないので、その都度 env -u を付けるのが確実
+env -u AWS_ACCESS_KEY_ID -u AWS_SECRET_ACCESS_KEY -u AWS_SESSION_TOKEN \
+  aws sso login --sso-session <session 名> --use-device-code --no-browser
+```
+
+**`--use-device-code` が必須。** `--no-browser` だけだと**認可コード + localhost コールバック方式**
+(`redirect_uri=http://127.0.0.1:<port>/oauth/callback`)になり、**ホストのブラウザからコンテナ内の
+ポートに戻れないため完了しない**(実測)。デバイスコード方式なら「URL を開いてコードを入力」だけで
+コンテナ側のログインが完了する。
+
+`aws configure sso` の対話に入らず、**`~/.aws/config` を直接書いてから `aws sso login`** するほうが
+コンテナでは扱いやすい。アカウント ID とロール名は、ログイン後に一覧から取得できる:
+
+```bash
+# アクセストークンは ~/.aws/sso/cache/*.json の accessToken(ログの残る場所に出さないこと)
+aws sso list-accounts      --access-token "$TOKEN" --region <sso リージョン>
+aws sso list-account-roles --access-token "$TOKEN" --account-id <上で得た ID> --region <sso リージョン>
+```
+
+プロファイル名を決めたら、各スタックの `.envrc` に `export AWS_PROFILE=<sso プロファイル名>` を書く。
+
+**`.envrc` に個人を特定する情報は入らない。** SSO では ID がブラウザログイン時に決まるため、設定に残るのは「どのポータル・どのアカウント・どのパーミッションセットか」だけ。
+
+| ファイル | コミット | 中身 | 個人差 |
+|---|---|---|---|
+| `terraform/environments/**/.envrc` | **する** | `export AWS_PROFILE=machineid-prod`(プロファイル**名**のみ) | なし。**全員同じ名前に揃えるための仕組み** |
+| `~/.aws/config` | しない | `sso_start_url` / `sso_account_id` / `sso_role_name` / `region` | **なし**(組織で共通。docs に貼って各自コピーでよい) |
+| `~/.aws/sso/cache/` | しない | 短命トークン | あり |
+
+権限が人によって違う場合は `sso_role_name` が変わるのでプロファイルを分ける(`machineid-prod` / `machineid-prod-ro`)。
+
+**地雷**: `.gitignore` の `.envrc` は**階層を問わずマッチする**。`terraform.example/` の `.envrc` が追跡されているのは ignore ルールより前にコミット済みだからで、**これから作る `terraform/environments/**/.envrc` は `git add` しても黙って無視される**。否定パターンを足すこと。
+
+```gitignore
+.envrc
+!terraform/environments/**/.envrc
+```
+
+#### 0-d. 検証(ここから CLI で確認できる)
+
+```bash
+aws sts get-caller-identity                     # AssumedRole の ARN が返る
+aws sso-admin list-instances                    # InstanceArn / IdentityStoreId
+aws sso-admin list-permission-sets --instance-arn <arn>
+aws identitystore list-users --identity-store-id <id>
+aws sso-admin list-account-assignments \
+  --instance-arn <arn> --account-id <id> --permission-set-arn <ps-arn>
+```
+
+以降のパーミッションセット追加・割り当ては CLI で完結する(`create-permission-set` /
+`attach-managed-policy-to-permission-set` / `create-account-assignment`)。**MFA の必須化だけは
+公開 API が無くコンソール設定。**
+
+#### 実施記録(2026-08-06 完了)
+
+| 項目 | 値 |
+|---|---|
+| インスタンス種別 | **組織インスタンス**(所有: 管理アカウント `394530725171`) |
+| InstanceArn | `arn:aws:sso:::instance/ssoins-7758a52a6de38d8c` |
+| IdentityStoreId / ポータル | `d-95679724b1` → `https://d-95679724b1.awsapps.com/start` |
+| **PrimaryRegion** | **`ap-northeast-1`** |
+| Organization | `o-276ybtepps`(FeatureSet: ALL、SCP 有効) |
+| ワークロードアカウント | `machineid-prod` / **`439996178164`** |
+| 許可セット | `AdministratorAccess` |
+| AWS CLI プロファイル | `machineid-prod`(`~/.aws/config`) |
+| **静的アクセスキー** | **0 本**(ADR の決定 6 どおり) |
+
+検証結果:
+
+```
+$ aws sts get-caller-identity --profile machineid-prod
+Arn: arn:aws:sts::439996178164:assumed-role/AWSReservedSSO_AdministratorAccess_.../shuhei.kawasaki
+```
+
+##### 踏んだ罠(手順に反映済み)
+
+1. **メンバーアカウントで有効化しようとして失敗**
+   (`The organization management account (394530725171) does not allow its members to create instances.`)。
+   作られようとしていたのは**アカウントインスタンス**で、そもそも目的を果たせない。組織インスタンスを
+   管理アカウントで有効化するのが正解 → 0-b の注記
+2. **組織インスタンスが us-east-2 に既存だった。** ユーザー・グループ・許可セットとも空だったため
+   削除して `ap-northeast-1` で作り直した。**空でなければ触らない**判断だった
+   (リージョン差の実害は「新規サインインの可用性」と「ID 情報の所在」程度)
+3. **`aws sso login --no-browser` だけでは完了しない。** `--use-device-code` が必須 → 0-c
+4. **compose の MinIO 用環境変数が AWS の資格情報を潰す。** 全 AWS コマンドに `env -u` が要る → 0-a
+
+##### 残タスク
+
+- **0-a の根治**(`libs/storage.ts` + compose)。コンテナ再作成を伴うため未実施
+- 委任管理者の設定(任意。日常の割り当てを管理アカウントから離す)
+- **SCP が有効**なので、terraform でリソース作成が想定外に拒否されたら、
+  管理アカウント側のポリシー(リージョン制限など)を疑うこと
 
 **削除するもの**: `14_user.tf-user-iam.tf` / `14_user.tf-user-main.tf` と対応するポリシー JSON 2 本(`12_policy.tf-user-*.json`)。
 

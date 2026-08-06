@@ -3,6 +3,9 @@ node_modules
 build
 **/.claude/settings.local.json
 .envrc
+# terraform の各スタックは AWS_PROFILE の切り替えに .envrc を使い、これはコミットする。
+# 中身はプロファイル名だけで秘密情報を含まない(docs/plans/20260806-aws-prod-setup.md)
+!terraform/environments/**/.envrc
 test-results
 playwright-report
 coverage
