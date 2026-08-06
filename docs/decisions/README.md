@@ -28,6 +28,8 @@ YYYYMMDD-<slug>.md      例: 20260713-datetime-design.md
 | 2026-08-04 | [dev サーバは `tsx watch` で直接実行し、型検査を並走させる](20260804-dev-server.md) |
 | 2026-08-04 | [CLAUDE.md は判断基準だけを持ち、手順は `.claude/skills/` に置く](20260804-agent-docs-structure.md) |
 | 2026-08-04 | [セッションはアイドル失効 + 延長方式とし、絶対失効は入れない](20260804-session-lifetime.md) |
+| 2026-08-06 | [本番 1 環境の最小構成とし、常駐ユーティリティサーバ・NAT Gateway・Aurora を置かない](20260806-aws-minimal-prod.md) |
+| 2026-08-06 | [サービスのイメージ更新を terraform の外に出し、マイグレーションとスクリプトは run-task、定期実行は API プロセス内のスケジューラで回す](20260806-deploy-and-scheduled-jobs.md) |
 
 ## 関連ドキュメント
 

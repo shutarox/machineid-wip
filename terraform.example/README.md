@@ -36,6 +36,23 @@ state は S3 バックエンド(`02_main.tf`)。環境ごとの AWS プロファ
 
 SES の DKIM トークンや Search Console の検証レコードのような**外部サービスが発行した値**も、旧環境のものが残っている。これらは**移し替えではなく、新しい環境で取り直す**もの。
 
+## この案件(machineid)では採らない部分
+
+**この参考例は dev / prod × main / util の 4 スタック構成だが、machineid は本番 1 環境の最小構成を採る。**このディレクトリを写すときは、以下が意図的に落とされていることを前提にすること(決定と根拠は ADR にある)。
+
+| 参考例にあるもの | machineid での扱い |
+|---|---|
+| `dev/` 一式 | 作らない(prod のみ) |
+| `util` / `util-app`(sshd + 公開 NLB の常駐作業機) | 置かない。ログインは **ECS Exec** |
+| `14_nat_gateway.tf`(NAT + EIP) | 置かない。ECS タスクは **public サブネット + `assign_public_ip`**、インバウンドは SG で ALB からのみ |
+| `33_rds_postgresql.tf`(Aurora Serverless v2) | **RDS PostgreSQL Single-AZ**(`db.t4g.small` / gp3) |
+| `terraform apply` がサービスまで更新する | サービスは `lifecycle { ignore_changes = [task_definition] }` で管理外。ロールアウトは `aws ecs update-service` |
+| 定期実行を EventBridge → `run-task` で回す | 軽いものは **API プロセス内のスケジューラ**。重い / 低頻度のみ EventBridge に残す |
+
+- `docs/decisions/20260806-aws-minimal-prod.md`
+- `docs/decisions/20260806-deploy-and-scheduled-jobs.md`
+- `docs/plans/20260806-aws-prod-setup.md`(実装手順)
+
 ## 関連
 
 - セキュリティヘッダをこの層(CloudFront / ALB)の責務とする決定: `docs/decisions/20260804-security-headers.md`

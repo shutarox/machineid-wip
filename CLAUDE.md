@@ -6,9 +6,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## プロジェクト概要
 
-AI エージェント駆動開発を前提とした、マルチテナント Web アプリケーションの雛形リポジトリ(既存プロダクトのプラットフォーム層から削ぎ落として構築中)。認証・マルチテナント RLS・型生成パイプライン・users CRUD 参照実装を備える。
+**`machineid`** — 雛形リポジトリ **`myapp`** から派生した案件用リポジトリ。AI エージェント駆動開発を前提としたマルチテナント Web アプリケーションで、認証・マルチテナント RLS・型生成パイプライン・users CRUD 参照実装を雛形から引き継いでいる。
 
 **設計を変える提案をする前に、該当の ADR を読むこと。** 「却下した選択肢」に既出のことが多い。
+
+### 現在のフェーズ: 初期カスタマイズ中(まっさら化の手前)
+
+このリポジトリは作業用の `machineid-wip` で、**初期カスタマイズが終わったら git 履歴と GitHub Project を捨て、初期コミット 1 つだけの新リポジトリ `machineid` に移す**(= まっさら化)。段取りと現在地は **`docs/plans/20260806-derive-first-project.md`**。
+
+**まっさら化の前に完了させるもの**: AWS 基本設定(terraform)/ アプリの要件そぎ落とし / **ドキュメントの案件化** / 痕跡・秘密情報の検査。
+
+そのため、**docs には雛形(`myapp`)としての記述がまだ残っている**。「この雛形は」「案件で使うときは」という視点の文章を見つけたら、それは**書き換え対象の残骸**であって現行の方針ではない。特に `docs/template-repo-workplan.md` と `docs/plans/` の大半は雛形を作った経緯の記録で、まっさら化のときに削除する。
+
+**雛形側の不備を見つけたら `docs/plans/20260806-derive-first-project.md` の「myapp に還元する項目」に追記すること。** 派生側の git 履歴は捨てるので、書き残さないと `myapp` に戻せない。
 
 DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コンテナは `TZ=Asia/Tokyo` で動作する。パッケージマネージャーは **pnpm**(`only-allow pnpm` で強制)。ルートは pnpm workspace(`backend` + `frontend`)で、`pnpm check` / `lint` / `test` / `dev` / `stop` はルートから両パッケージに対して実行できる。
 
@@ -26,6 +36,8 @@ DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コン�
 | 環境を立ち上げる | `README.md` / `docs/dev-container.md` |
 | 未対応と分かっている問題を知る | `docs/known-issues.md` |
 | **過去にエージェントが踏んだ罠を知る** | `docs/template-repo-workplan.md` の**受け入れテスト実施記録**(前任者が詰まった箇所の一覧) |
+| まっさら化までの段取り・現在地を知る | `docs/plans/20260806-derive-first-project.md` |
+| AWS 本番環境を作る | `docs/plans/20260806-aws-prod-setup.md`(決定は `docs/decisions/20260806-aws-*.md`) |
 
 スキル本体は `.claude/skills/<名前>/SKILL.md`。**スキル機構が使えない環境でも、このパスを直接読めばよい。**
 
@@ -56,7 +68,7 @@ DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コン�
   ```
 
   **コンテナ内から docker は叩けない**(docker.sock はマウントされているが権限がない)ので、ホスト側の実行はユーザーに依頼する。試行錯誤中は push を挟まず `/host/app` へ直接 cp するショートカットもあるが、**その一時上書きを消さないと次の push が通らない**。詳細と背景は `docs/dev-container.md` の「手順 1」
-- **Context7 の使いどころ**: 外部ライブラリ/API の仕様が不確かなとき、セットアップ手順やバージョン差を疑うときに、該当箇所だけ参照する。まずコードベースを見て判断し、必要なときだけ呼ぶ。取得した情報は要点と短いコード例に要約する
+- **Context7 の使いどころ**: 外部ライブラリ/API の仕様が不確かなとき、セットアップ手順やバージョン差を疑うときに、該当箇所だけ参照する。まずコードベースを見て判断し、必要なときだけ呼ぶ。取得した情報は要点と短いコード例に要約する。接続設定はリポジトリ直下の `.mcp.json`(HTTP transport / `https://mcp.context7.com/mcp`)。API キーなしの匿名利用で動くが、レート制限に当たるようなら各自の `~/.claude.json` 側でヘッダ付きの設定に差し替える
 
 ## アーキテクチャ
 

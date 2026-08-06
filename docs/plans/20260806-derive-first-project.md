@@ -1,7 +1,37 @@
 # 派生プロジェクト 1 号機を手で起こす
 
 作成: 2026-08-06
-状態: **未着手**
+状態: **進行中**(1 号機 = `machineid`。手順 1・2 は完了、現在は手順 3)
+
+## 現在地(2026-08-06)
+
+| 手順 | 状態 |
+|---|---|
+| 1. 作業用リポジトリを作る | **完了**。`shutarox/machineid-wip`。ルートコミットは `雛形からの初期状態`(orphan)で、雛形の履歴は持ち込んでいない |
+| 2. 環境を分離してコンテナ再作成 | **完了**。compose の `name: machineid` / `image: machineid-dev-local:latest` / 公開ポート 8802・8082・9002・9003。`myapp -> machineid` のリネームも適用済み |
+| 3. 削ぎ落とし | **着手中**(下記の内訳を参照) |
+| 4. 痕跡の検査 | 未着手 |
+| 5. 検証 | 未着手 |
+| 6. 本番リポジトリへ(= まっさら化) | 未着手 |
+
+**「まっさら化」= 手順 6**(`shutarox/machineid` を新規作成し、初期コミット 1 つだけを push する)。
+`machineid-wip` の git 履歴と GitHub Project はここで捨てる。
+
+### まっさら化の前にやりきること
+
+**手順 6 の前に完了させる**(まっさら化後にやると、初期コミットに「雛形のままの状態」が焼き付くため)。
+
+| # | 作業 | 状態 |
+|---|---|---|
+| A | **terraform による AWS 基本設定** | 計画済み → `docs/plans/20260806-aws-prod-setup.md` |
+| B | **アプリの要件そぎ落とし**(案件に不要な参照実装の削除) | 未着手 |
+| C | **ドキュメントの案件化** | 未着手。下記 |
+| D | 痕跡・秘密情報の検査(手順 4) | 未着手 |
+
+**C が見落としやすい。** 現状の `CLAUDE.md` / `docs/` は**雛形(`myapp`)としての文書**であり、
+「この雛形は〜」「案件で使うときは〜」という視点で書かれている。派生先では
+**「このプロジェクトは〜」という案件の文書**に書き換わっていなければならない。
+対象と扱いは手順 3 の表のとおり。
 
 前計画 `20260805-derive-project-skill.md`(スキルを先に作る)は**中止**。理由は下記「なぜ手作業に変えたか」。
 あちらの調査結果は方針に依存しないので、必要な部分はこの計画に取り込んである。
@@ -150,9 +180,14 @@ compose の `name:` / `image:` / 公開ポートを変更する(上表)。コン
 | `docs/template-repo-workplan.md` | 削除 |
 | `docs/known-issues.md` | 案件に効く項目だけ残して書き直す |
 | `docs/dev-container.md` | 残す(構成が同じため) |
-| `terraform.example/` | **案件用の実 terraform を新規作成**。example は削除 |
+| `terraform.example/` | **案件用の実 terraform を新規作成**(`docs/plans/20260806-aws-prod-setup.md`)。example は削除 |
 | `deploy/*.sh` | AWS プロファイル名・ECR 名・clone 先を案件のものに |
 | 報告書 CRUD(`reports` / `uploadedImages`) | **案件に不要なら削除**。判断は案件次第 |
+| `CLAUDE.md` の「プロジェクト概要」 | **雛形の説明から案件の説明に書き換える**。「雛形リポジトリ」「案件で使うときは」という視点が残っていないか通しで確認する |
+| `README.md` | 同上。雛形の使い方ではなく案件のセットアップ手順にする |
+| `docs/decisions/2026080*-aws-*.md` | **残す**(案件の構成判断そのもの) |
+| `docs/plans/20260806-aws-prod-setup.md` | 実施記録を書き切ってから、残すか ADR へ吸収するか判断する |
+| この計画ファイル自身 | **削除**(まっさら化の作業記録なので、案件リポジトリには持ち込まない)。ただし「myapp に還元する項目」は**削除前に `myapp` 側へ移すこと** |
 
 ### 4. 痕跡の検査(案件名を列挙しない)
 
@@ -215,6 +250,28 @@ compose の `name:` / `image:` / 公開ポートを変更する(上表)。コン
 - 派生作業が終わったら、リストを `myapp` 側の PR にまとめる
 
 前例: PR #44 で `terraform.example` の `update_doctors` / `hcho.jp` を直したのは、まさにこの型の還元。
+
+## myapp に還元する項目
+
+**まっさら化(手順 6)の前に `myapp` 側の PR にまとめること。** この計画ファイルごと消えるので、
+残したまま進めると失われる。
+
+### 雛形の不備(修正して還元する)
+
+| # | 内容 | 発見 |
+|---|---|---|
+| 1 | **`Dockerfile.prod-main` / `dev-main` で本番マイグレーションが実行できない。** 最終ステージに `prisma/schema.prisma` しかコピーしておらず、`prisma/migrations/`・`prisma/schema.prisma.generated`・`prisma.config.ts` が無い。`datasource db` に `url` が書かれておらず接続先が `prisma.config.ts` 由来なので、3 つとも必要 | 2026-08-06 AWS 構成の検討中 |
+| 2 | **`terraform.example` の EventBridge ターゲットがリビジョン固定の ARN を参照している**(`aws_ecs_task_definition.main.arn`)。デプロイしても定期実行だけ古いイメージで走り続ける。`arn_without_revision` にすべき | 同上 |
+| 3 | **`deploy/deploy_prod-main.sh` に旧案件の実値が残っている。** `aws_account_id="756074065984"` と `cloudfront_distribution_id="E3TDM7MGWEED1K"`。手順 4 の痕跡検査は `docs/` と `terraform.example/` を見ていたが、**`deploy/` も対象**にすべき | 同上 |
+| 4 | **ブランド資産が前プロダクトのまま。** `frontend/public/favicon.ico` / `apple-touch-icon.png` が teal(`#319795`)の旧アイコンだった。雛形としては中立な資産にするか、少なくとも「差し替え必須」の一覧に載せる。あわせて `index.html` の `<link rel="icon" type="image/svg+xml">` が実体(.ico)と食い違っていた | 2026-08-06 |
+| 5 | **ホスト clone の `receive.denyCurrentBranch updateInstead` が未設定だと最初の `git push -f host` が拒否される。** `docs/dev-container.md` に「事前設定(一度だけ)」として書いてはあるが、派生時に新しいホスト clone を作ると未実施になる。手順 2 のチェック項目に入れる | 2026-08-06 |
+
+### 派生手順そのものへの追記(`myapp` の計画側に反映)
+
+| # | 内容 |
+|---|---|
+| 6 | **手順 2 で公開ポートを変えたら、compose の `environment` にある `SPA_APP_BASE_URL` / `API_SERVER_BASE_URL` / `VITE_API_SERVER_BASE_URL` も同じ値に揃える。** `ports:` だけ変えると、ホストからのアクセスとアプリが認識する URL が食い違う(実際に 8801/8081 のまま残っていた) |
+| 7 | **手順 3 の削ぎ落とし対象にブランド資産と `CLAUDE.md` / `README.md` の視点変更を明記する**(上記 4 と、手順 3 の表に追加済みの行) |
 
 ## スコープ外
 
