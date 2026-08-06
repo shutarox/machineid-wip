@@ -169,6 +169,25 @@ export const S3_FORCE_PATH_STYLE = process.env.S3_FORCE_PATH_STYLE === 'true';
 
 export const AWS_REGION = process.env.AWS_DEFAULT_REGION ?? 'ap-northeast-1';
 
+/**
+ * S3 互換ストレージ(MinIO)の資格情報。**本番では未設定にする**(タスクロールを使う)。
+ *
+ * **`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` という名前で渡してはいけない。**
+ * AWS の資格情報チェーンは環境変数を `~/.aws` のプロファイルより優先するため、
+ * それらをコンテナ全体に設定すると、同じコンテナ内の `aws` CLI や terraform が
+ * MinIO のダミー資格情報を使ってしまい `InvalidClientTokenId` で失敗する(実測)。
+ *
+ * そのため接頭辞を `S3_` にして衝突を避け、SDK には**明示的に**渡す。
+ * 未設定なら `credentials: undefined` となり SDK の既定チェーン(= 本番のタスクロール)に落ちる。
+ */
+export const S3_CREDENTIALS =
+  process.env.S3_ACCESS_KEY_ID && process.env.S3_SECRET_ACCESS_KEY
+    ? {
+        accessKeyId: process.env.S3_ACCESS_KEY_ID,
+        secretAccessKey: process.env.S3_SECRET_ACCESS_KEY,
+      }
+    : undefined;
+
 /** presigned URL の既定の有効期限(秒) */
 export const S3_PRESIGN_EXPIRES_SEC = 10 * 60;
 

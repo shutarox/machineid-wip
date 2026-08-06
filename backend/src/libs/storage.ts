@@ -31,11 +31,14 @@ export type Storage = {
   remove(keys: string[]): Promise<void>;
 };
 
+// credentials は**ローカル / CI(MinIO)でだけ**明示的に渡す。本番は undefined になり、
+// SDK の既定チェーン = ECS のタスクロールに落ちる(Config.S3_CREDENTIALS のコメント参照)
 const s3Client = (): S3Client =>
   new S3Client({
     region: Config.AWS_REGION,
     endpoint: Config.S3_ENDPOINT,
     forcePathStyle: Config.S3_FORCE_PATH_STYLE,
+    credentials: Config.S3_CREDENTIALS,
   });
 
 // presigned URL の発行専用。URL を開くのはサーバではなく**ブラウザ**なので、
@@ -46,6 +49,7 @@ const s3PresignClient = (): S3Client =>
     region: Config.AWS_REGION,
     endpoint: Config.S3_PUBLIC_ENDPOINT,
     forcePathStyle: Config.S3_FORCE_PATH_STYLE,
+    credentials: Config.S3_CREDENTIALS,
   });
 
 const requireBucket = (): string => {

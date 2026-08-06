@@ -44,8 +44,13 @@ services:
       # (SigV4 が Host ごと署名するため 403)。発行時点でホスト公開ポートを使う
       - S3_PUBLIC_ENDPOINT=http://localhost:9002
       - S3_FORCE_PATH_STYLE=true
-      - AWS_ACCESS_KEY_ID=minioadmin
-      - AWS_SECRET_ACCESS_KEY=minioadmin
+      # **AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY という名前では渡さない。**
+      # AWS の資格情報チェーンは環境変数をプロファイルより優先するため、その名前で
+      # 撒くとコンテナ内の aws CLI / terraform が MinIO のダミーを使ってしまい
+      # InvalidClientTokenId で失敗する。接頭辞を S3_ にして衝突を避け、
+      # backend/src/libs/storage.ts が SDK へ明示的に渡す
+      - S3_ACCESS_KEY_ID=minioadmin
+      - S3_SECRET_ACCESS_KEY=minioadmin
       - AWS_DEFAULT_REGION=ap-northeast-1
       # local 実行環境特有の設定
       - IS_LOCAL_DEVELOPMENT=true
