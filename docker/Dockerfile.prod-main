@@ -52,7 +52,10 @@ RUN apt-get update && apt-get upgrade -y \
         tini \
         locales \
         tzdata \
-        postgresql-client-17 \
+        # **RDS のメジャーバージョンと合わせる**(terraform の engine_version = "18")。
+        # pg_dump は自分より新しいサーバを拒否するため、古いままだと
+        # ECS Exec で入ってもダンプが取れない
+        postgresql-client-18 \
     && ln -snf /usr/share/zoneinfo/Asia/Tokyo /etc/localtime \
     && echo "Asia/Tokyo" > /etc/timezone \
     && locale-gen ja_JP.UTF-8 \

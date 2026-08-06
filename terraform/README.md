@@ -13,8 +13,8 @@
 ```
 environments/prod/
   iam/       IAM ロール(ECS タスク実行 / タスク / EventBridge)
-  base/      VPC・サブネット・ルーティング・SG・RDS・内部 DNS・S3 Gateway エンドポイント
-  main/      Route53 ゾーン・ACM・S3 + CloudFront(SPA)・ECR・ALB
+  base/      VPC・サブネット・ルーティング・SG・RDS・内部 DNS・**公開 DNS ゾーン**・S3 Gateway エンドポイント
+  main/      ACM・公開レコード・S3 + CloudFront(SPA)・ECR・ALB
   main-app/  ECS クラスタ・タスク定義・サービス・autoscaling・定期実行
 ```
 
@@ -35,20 +35,37 @@ environments/prod/
 
 ## 適用順序
 
-依存関係があるので初回はこの順に apply する。
+依存関係があるので初回はこの順に apply する。**base と main の間に人手の作業が挟まる。**
 
 ```
-iam → base → main → main-app
+iam → base → [NS 委任を親ゾーンへ登録] → main → [イメージを ECR へ push] → main-app
 ```
+
+### base と main の間: NS 委任(必須)
+
+親ゾーン `kas.jp` は **別の AWS アカウント**にあり、この terraform の管理外。
+`machineid.kas.jp` は未委任なので、`base` の apply 後に手で登録する。
+
+```bash
+cd environments/prod/base && terraform output name_servers   # 4 本の NS が出る
+# → kas.jp のゾーン(別アカウント)に machineid.kas.jp の NS レコードとして登録
+dig +short NS machineid.kas.jp                               # 返るようになるまで待つ
+```
+
+**委任前に `main` を apply しないこと。** `aws_acm_certificate_validation` が DNS 検証を
+完了できず、**既定 75 分のタイムアウトまで固まる**。公開ゾーンを `main` ではなく `base` に
+置いているのは、この待ちを apply の境界に追い出すため。
+
+### main と main-app の間: 最初のイメージ
 
 `main-app` は `var.ecr_digest` を要求する(デプロイスクリプトが `ecr_digest.auto.tfvars` に書く)ため、
 **最初のイメージを ECR に push してからでないと apply できない**。
 
 ## 実行方法
 
-各ディレクトリで `direnv allow`。`.envrc` が SSO プロファイルを設定し、
-**MinIO 用のダミー資格情報を unset する**(これを外さないと AWS CLI / terraform が
-`InvalidClientTokenId` になる)。
+`environments/prod/` で `direnv allow` を 1 回。**`.envrc` はここに 1 つだけ**で、
+direnv が上位へ遡って読むため配下の全スタックに効く(スタックごとに権限を分ける必要が出たら、
+そのディレクトリに置いて上書きする)。中身は SSO プロファイル名のみ。
 
 ```bash
 aws sso login --sso-session machineid --use-device-code --no-browser
@@ -59,8 +76,8 @@ cd environments/prod/base && terraform init && terraform plan
 
 | 値 | 現在 | 備考 |
 |---|---|---|
-| `domain_name` | **`machineid.example.com`(仮)** | 決まり次第 `main` と `main-app` の両方を差し替える |
-| Route53 の親ゾーンへの NS 委任 | **未実施** | `main` の apply 後に `terraform output name_servers` を親ゾーン(別アカウント)へ手で登録する |
+| `domain_name` | `machineid.kas.jp` | **`base` / `main` / `main-app` の 3 箇所で同じ値にする** |
+| Route53 の親ゾーンへの NS 委任 | **未実施** | `base` の apply 後に `terraform output name_servers` を `kas.jp`(別アカウント)へ手で登録する。**これが済むまで `main` を apply しない** |
 | `db_master_password` | **未設定** | `TF_VAR_db_master_password` で渡す。**リポジトリに書かない** |
 | tfstate バケット | **未作成** | `machineid-prod-tfstate-439996178164`。**terraform では作れない**(backend の init 時に存在が必要)ので CLI で先に 1 回作る |
 | SSM パラメータ | **未作成** | `/machineid-keys/*`(`DB_URL` / `DB_PASSWORD` / `COOKIE_SECRET` ほか)。秘密なので terraform で作らない |

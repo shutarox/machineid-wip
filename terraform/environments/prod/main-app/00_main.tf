@@ -61,7 +61,7 @@ variable "aws_account_id" {
 variable "domain_name" {
   description = "main スタックの domain_name と揃える"
   type        = string
-  default     = "machineid.example.com"
+  default     = "machineid.kas.jp"
 }
 
 variable "local_domain_name" {

@@ -71,13 +71,12 @@ variable "aws_account_id" {
   default = "439996178164"
 }
 
-# TODO: 案件のドメインが決まったら差し替える(現在は仮)。
-# 親ゾーンは別アカウントにあるため、ここでサブドメインのゾーンを作り、
-# **親ゾーン側に NS 委任レコードを手で足す**(docs/plans/20260806-aws-prod-setup.md)
+# ゾーン自体は base スタックが作る。ここでは data 参照するだけなので、
+# **base の domain_name と必ず同じ値にする**
 variable "domain_name" {
-  description = "アプリのドメイン。このゾーンを本スタックで作成する"
+  description = "アプリのドメイン。ゾーンは base が作る(00_ref.tf で data 参照)"
   type        = string
-  default     = "machineid.example.com"
+  default     = "machineid.kas.jp"
 }
 
 variable "s3_bucket_name_spa" {

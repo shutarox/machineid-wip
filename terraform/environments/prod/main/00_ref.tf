@@ -23,6 +23,13 @@ data "aws_subnet" "public_1c" {
   }
 }
 
+# 公開ゾーンは base スタックが作る。**base の apply と NS 委任が済んでいないと
+# このスタックは apply できない**(ACM の DNS 検証が通らない)
+data "aws_route53_zone" "main" {
+  name         = var.domain_name
+  private_zone = false
+}
+
 data "aws_security_group" "is_alb" {
   vpc_id = data.aws_vpc.main.id
 

@@ -1,8 +1,3 @@
-output "name_servers" {
-  description = "**親ゾーン(コーポレートドメイン)に NS 委任レコードとして手で登録する値**"
-  value       = aws_route53_zone.main.name_servers
-}
-
 output "url_host_name_spa" {
   value = local.url_host_name_spa
 }

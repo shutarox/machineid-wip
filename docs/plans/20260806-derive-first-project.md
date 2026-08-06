@@ -266,13 +266,14 @@ compose の `name:` / `image:` / 公開ポートを変更する(上表)。コン
 | 4 | **ブランド資産が前プロダクトのまま。** `frontend/public/favicon.ico` / `apple-touch-icon.png` が teal(`#319795`)の旧アイコンだった。雛形としては中立な資産にするか、少なくとも「差し替え必須」の一覧に載せる。あわせて `index.html` の `<link rel="icon" type="image/svg+xml">` が実体(.ico)と食い違っていた | 2026-08-06 |
 | 5 | **ホスト clone の `receive.denyCurrentBranch updateInstead` が未設定だと最初の `git push -f host` が拒否される。** `docs/dev-container.md` に「事前設定(一度だけ)」として書いてはあるが、派生時に新しいホスト clone を作ると未実施になる。手順 2 のチェック項目に入れる | 2026-08-06 |
 | 6 | **開発コンテナの MinIO 用環境変数が AWS の資格情報を潰す。** `docker-compose.local.yml` が `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をコンテナ全体に設定しており、**環境変数はプロファイルより優先される**ため、コンテナ内の `aws` コマンドが常に `minioadmin` を使って `InvalidClientTokenId` で失敗する(実測)。`deploy/*.sh` の `aws ecr get-login-password` も同様。**`machineid` 側で対応済み**(2026-08-06): compose / CI の環境変数を **`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`** に改名し、`config.ts` の `S3_CREDENTIALS` 経由で `S3Client` に明示的に渡す(本番は `undefined` → タスクロール)。**この差分をそのまま `myapp` に持っていける** | 2026-08-06 |
+| 7 | **`Dockerfile.local` と `Dockerfile.prod-main` の postgresql-client のメジャーがずれている**(local は 18、prod-main は 17)。ローカルの postgres も 18 なので、雛形の時点で開発と本番のクライアントが食い違っている。`pg_dump` は自分より新しいサーバを拒否するため、本番 DB のメジャーを上げたときに気づきにくい形で壊れる | 2026-08-06 |
 
 ### 派生手順そのものへの追記(`myapp` の計画側に反映)
 
 | # | 内容 |
 |---|---|
-| 7 | **手順 2 で公開ポートを変えたら、compose の `environment` にある `SPA_APP_BASE_URL` / `API_SERVER_BASE_URL` / `VITE_API_SERVER_BASE_URL` も同じ値に揃える。** `ports:` だけ変えると、ホストからのアクセスとアプリが認識する URL が食い違う(実際に 8801/8081 のまま残っていた) |
-| 8 | **手順 3 の削ぎ落とし対象にブランド資産と `CLAUDE.md` / `README.md` の視点変更を明記する**(上記 4 と、手順 3 の表に追加済みの行) |
+| 8 | **手順 2 で公開ポートを変えたら、compose の `environment` にある `SPA_APP_BASE_URL` / `API_SERVER_BASE_URL` / `VITE_API_SERVER_BASE_URL` も同じ値に揃える。** `ports:` だけ変えると、ホストからのアクセスとアプリが認識する URL が食い違う(実際に 8801/8081 のまま残っていた) |
+| 9 | **手順 3 の削ぎ落とし対象にブランド資産と `CLAUDE.md` / `README.md` の視点変更を明記する**(上記 4 と、手順 3 の表に追加済みの行) |
 
 ## スコープ外
 

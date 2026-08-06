@@ -27,8 +27,15 @@ resource "aws_lb_target_group" "api" {
   target_type = "ip" # Fargate(awsvpc)なので ip
 
   health_check {
-    enabled             = true
-    path                = "/api/health"
+    enabled = true
+    # **`/api/health` は存在しない。** 実在するのは `/api/ping` で、
+    # 認証不要・DB 疎通確認込みで 200 を返す(backend/src/routes/api/ping.GET.ts)。
+    #
+    # **MAINTENANCE_MODE のときも 200(`{"status":"maintenance"}`)を返すのは意図的。**
+    # フロントがメンテナンス中であることを知る必要があり、5xx にすると
+    # 「サーバ障害」と区別できなくなる。ALB 側から見てもターゲットが健全なままなので、
+    # メンテナンス中にタスクが落とされない。**この matcher を "200" 以外にしないこと。**
+    path                = "/api/ping"
     port                = "8080"
     protocol            = "HTTP"
     matcher             = "200"

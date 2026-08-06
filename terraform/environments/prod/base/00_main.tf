@@ -72,6 +72,16 @@ variable "local_domain_name" {
   default     = "prod.internal"
 }
 
+variable "domain_name" {
+  description = <<-EOT
+    アプリの公開ドメイン。**このゾーンを base で作る**。
+    親ゾーン(kas.jp)は別アカウントにあるため、apply 後に NS 委任を手で登録する必要があり、
+    その待ちを main の apply より前に置くためにここに置いている(README の「適用順序」)。
+  EOT
+  type        = string
+  default     = "machineid.kas.jp"
+}
+
 variable "db_master_password" {
   description = <<-EOT
     RDS のマスターパスワード。**リポジトリに書かない。**

@@ -1,20 +1,15 @@
-# DNS ゾーンと ACM 証明書
+# ACM 証明書と公開レコード
 #
-# **親ゾーン(コーポレートドメイン)は別アカウントにあり、この terraform の管理外。**
-# ここで作るサブドメインゾーンの NS レコードを、親ゾーンに手で登録する必要がある
-# (apply 後に aws_route53_zone.main.name_servers を出力するので、それを渡す)。
+# **ゾーン自体は base スタックで作る**(00_ref.tf の data 参照)。
+# 親ゾーン(`kas.jp`)は別アカウントにあり NS 委任が手作業になるため、
+# その待ちを base と main の境界に置いている(base/16_route53.tf のコメント)。
+#
+# **委任が済む前にこのスタックを apply しないこと。**
+# `aws_acm_certificate_validation` が検証できず、既定 75 分のタイムアウトまで固まる。
 #
 # コーポレートサイト向けの設定(MX / SPF / Google Workspace の DKIM / Search Console /
 # apex の www リダイレクト)は**一切持ち込まない**。あれは組織のドメイン基盤であって
 # アプリのものではない。
-
-resource "aws_route53_zone" "main" {
-  name = var.domain_name
-
-  tags = {
-    Name = "hosted-zone-${var.domain_name}"
-  }
-}
 
 #================================================= ACM(ALB 用・ap-northeast-1)
 
@@ -40,7 +35,7 @@ resource "aws_route53_record" "api_cert_validation" {
     }
   }
 
-  zone_id         = aws_route53_zone.main.zone_id
+  zone_id         = data.aws_route53_zone.main.zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -80,7 +75,7 @@ resource "aws_route53_record" "spa_cert_validation" {
     }
   }
 
-  zone_id         = aws_route53_zone.main.zone_id
+  zone_id         = data.aws_route53_zone.main.zone_id
   name            = each.value.name
   type            = each.value.type
   records         = [each.value.record]
@@ -98,7 +93,7 @@ resource "aws_acm_certificate_validation" "spa" {
 #================================================= 公開レコード
 
 resource "aws_route53_record" "spa" {
-  zone_id = aws_route53_zone.main.zone_id
+  zone_id = data.aws_route53_zone.main.zone_id
   name    = local.url_host_name_spa
   type    = "A"
 
@@ -110,7 +105,7 @@ resource "aws_route53_record" "spa" {
 }
 
 resource "aws_route53_record" "api" {
-  zone_id = aws_route53_zone.main.zone_id
+  zone_id = data.aws_route53_zone.main.zone_id
   name    = local.url_host_name_api
   type    = "A"
 

@@ -27,3 +27,16 @@ output "db_host" {
   description = "タスク定義の DB_HOST に渡す値"
   value       = aws_route53_record.db_pg.name
 }
+
+output "name_servers" {
+  description = <<-EOT
+    **親ゾーン(kas.jp・別アカウント)に NS 委任レコードとして手で登録する値。**
+    登録して `dig NS ${"machineid.kas.jp"}` が返るようになってから main を apply すること
+    (先に apply すると ACM の DNS 検証がタイムアウトまで固まる)。
+  EOT
+  value       = aws_route53_zone.main.name_servers
+}
+
+output "public_zone_id" {
+  value = aws_route53_zone.main.zone_id
+}

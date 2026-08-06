@@ -30,7 +30,7 @@
 | 環境 | **prod のみ**。dev は作らない |
 | 作業用サーバ | **置かない**。ログインは ECS Exec |
 | ネットワーク | **NAT なし**。ECS タスクは public サブネット + `assign_public_ip`、インバウンドは SG で ALB からのみ |
-| DB | **RDS PostgreSQL / Single-AZ / db.t4g.small / gp3**(Aurora Serverless v2 をやめる) |
+| DB | **RDS PostgreSQL 18 / Single-AZ / db.t4g.micro / gp3**(Aurora Serverless v2 をやめる)。18 はローカル・CI の `postgres:18` に合わせたもので、ap-northeast-1 で `db.t4g.micro` × 18.4 が使えることを確認済み |
 | サービス更新 | **terraform の管理外**(`lifecycle { ignore_changes = [task_definition, desired_count] }`)。ロールアウトは `aws ecs update-service` |
 | マイグレーション | **デプロイの独立ステップ**として `run-task`。`exitCode` 0 を確認してから `update-service` |
 | `script/` の実行 | **`run-task` の command override**(汎用ラッパー `deploy/run_task.sh`) |
@@ -52,11 +52,12 @@
 
 ## 未決定(着手前に埋める)
 
-- **アプリのドメイン名**(`myappdomain.com` はプレースホルダ)
-- **アプリ向け Route53 ゾーンの持ち方** — 次のどちらかで `prod/main` の書き方が変わる
-  - **(a) コーポレートゾーンに直接レコードを書く**: `data "aws_route53_zone"` で参照する。**同一 AWS アカウントにゾーンがある場合のみ**成立し、いちばん簡単
-  - **(b) アプリ用のサブドメインゾーンを切る**: `prod/main` に `aws_route53_zone` を作り、**親ゾーン側に NS 委譲レコードを手で足す**(親はこの terraform の管理外)。別アカウント運用ならこちら
-  - どちらでも **ACM の DNS 検証レコードを書き込める場所**が必要になる点は同じ
+- ~~アプリのドメイン名~~ → **`machineid.kas.jp`(2026-08-06 決定)**
+- ~~アプリ向け Route53 ゾーンの持ち方~~ → **決定済み(2026-08-06)**。実測で次が分かった。
+  - `kas.jp` は Route53 にあるが **`machineid-prod` とは別アカウント**(このアカウントのホストゾーンは 0 件)
+  - `machineid.kas.jp` は **未委任**(`dig NS` が空)
+  - → **サブドメインゾーンを `machineid-prod` に作り、親へ NS 委任を手で登録する**一択
+  - **ゾーンは `main` ではなく `base` に置いた。** 委任は人手なので、`aws_acm_certificate_validation` と同じスタックに置くと**検証が既定 75 分のタイムアウトまで固まる**。`base` に置けば apply の境界が委任の手前に来る(`terraform/README.md` の「適用順序」)
 - **SES の送信ドメイン** — コーポレートドメインで verify 済みならアプリ側に SES リソースは不要。案件のサブドメインから送るなら `prod/main` にドメイン ID + DKIM の CNAME を足す
 - AWS アカウント ID / **SSO プロファイル名** / tfstate 用 S3 バケット名(グローバル一意)
 - `project_name` を `machineid` に統一(SSM の名前空間 `machineid-keys/` と `backend/src/config.ts` の `SSM_KEY_PREFIX` を揃える)
@@ -72,9 +73,9 @@ terraform/
   environments/
     prod/
       iam/       IAM ロール群(旧 modules/iam を展開)。**terraform 実行用ユーザは作らない**
-      base/      VPC・サブネット(public×2 / private×2)・ルートテーブル・IGW
-                 ・SG・RDS・S3 Gateway エンドポイント・プライベートホストゾーン
-      main/      ACM・アプリ向け Route53 レコード・S3 + CloudFront(SPA)
+      base/      VPC・サブネット(public×2 / private×2)・ルートテーブル・IGW・SG・RDS
+                 ・S3 Gateway エンドポイント・プライベートホストゾーン・**公開ゾーン**
+      main/      ACM・公開レコード・S3 + CloudFront(SPA)
                  ・ECR・ALB・監視(SNS + Lambda + アラーム)
       main-app/  ECS クラスタ・タスク定義・サービス・autoscaling・EventBridge
 ```
@@ -163,8 +164,9 @@ InvalidClientTokenId: The security token included in the request is invalid.   �
 **移行中も両方の状態で動く**: 新コードは `S3_ACCESS_KEY_ID` が未設定なら `credentials: undefined` になり、
 稼働中コンテナに残っている旧 `AWS_ACCESS_KEY_ID` を既定チェーンが拾う。コンテナ再作成後は新名で明示的に渡る。
 
-**残: 開発コンテナの再作成**(compose 変更の反映)。それまでは `terraform/environments/prod/*/.envrc` の
-`unset` 3 行が旧名を打ち消す。再作成後はその 3 行を削除してよい。
+**完了(2026-08-06)**: 開発コンテナを再作成し、`AWS_ACCESS_KEY_ID` が消えたこと・`env -u` なしで
+`aws sts get-caller-identity --profile machineid-prod` が通ること・E2E(実 MinIO 経由の画像アップロード)が
+通ることを確認。暫定で置いていた `.envrc` の `unset` 3 行は削除済み。
 
 - 雛形にも同じ問題があるため還元対象(`20260806-derive-first-project.md` の項目 6)
 
@@ -239,7 +241,7 @@ aws sso list-accounts      --access-token "$TOKEN" --region <sso リージョン
 aws sso list-account-roles --access-token "$TOKEN" --account-id <上で得た ID> --region <sso リージョン>
 ```
 
-プロファイル名を決めたら、各スタックの `.envrc` に `export AWS_PROFILE=<sso プロファイル名>` を書く。
+プロファイル名を決めたら、**`terraform/environments/prod/.envrc` に 1 つだけ** `export AWS_PROFILE=<sso プロファイル名>` を書く(direnv は上位へ遡って読むので配下の全スタックに効く)。雛形はスタックごとに `.envrc` を置いていたが、それは `iam` スタックだけ別の IAM ユーザを使っていたためで、**SSO プロファイルに統一した今は分ける理由がない**。
 
 **`.envrc` に個人を特定する情報は入らない。** SSO では ID がブラウザログイン時に決まるため、設定に残るのは「どのポータル・どのアカウント・どのパーミッションセットか」だけ。
 

@@ -21,8 +21,8 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_db_parameter_group" "main" {
-  name   = "${var.project_name}-${var.environment}-pg17"
-  family = "postgres17"
+  name   = "${var.project_name}-${var.environment}-pg18"
+  family = "postgres18"
 
   # アプリは TZ=Asia/Tokyo 前提だが、DB 側は UTC のままにする。
   # @db.Date の正規化と DateTime のシリアライズはアプリ側で完結しており
@@ -41,9 +41,13 @@ resource "aws_db_instance" "main" {
   identifier = "${var.project_name}-${var.environment}-pg"
 
   engine = "postgres"
+  # **ローカル開発 / CI の postgres:18 に合わせる**(本番とローカルの差を減らすのが
+  # RDS を選んだ理由のひとつ)。ap-northeast-1 で 18.4 まで提供されており、
+  # db.t4g.micro でも利用可能なことを確認済み(2026-08-06)。
+  #
   # メジャーバージョンのみ指定し、マイナーは AWS に追従させる。
   # apply 時に実在する最新マイナーへ解決されるため、plan で確認すること
-  engine_version             = "17"
+  engine_version             = "18"
   auto_minor_version_upgrade = true
 
   instance_class = "db.t4g.micro"
