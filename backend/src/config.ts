@@ -19,8 +19,8 @@ async function getSSMParametersWithRetry(
   delay = 1000
 ): Promise<Record<string, string>> {
   // ローカル / CI は AWS へ接続せず、必ず ~/.ssm-keys.json から読む。
-  // 開発コンテナに AWS_PROFILE を設定していない(MinIO 用の静的キーを
-  // 資格情報チェーンに優先させないため)ので、SSM を引く資格情報が無い
+  // 開発コンテナと CI に AWS の資格情報を前提させないための意図的な分岐で、
+  // SSO でログイン済みかどうかに関係なく同じ挙動にする
   const ssmKeysPath = path.join(process.env?.HOME ?? '', '.ssm-keys.json');
   if (process.env.IS_LOCAL_DEVELOPMENT === 'true') {
     if (!fs.existsSync(ssmKeysPath)) {

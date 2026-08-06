@@ -43,7 +43,9 @@ AI エージェント駆動開発を前提とした、新規案件用のテン�
 
 > キーのプレフィックスは**環境変数 `SSM_KEY_PREFIX` で差し替えられる**(既定 `/myapp-keys`、末尾の `/` は任意)。案件では自分の名前空間を設定し、このファイルのキーもそれに合わせる。プレフィックスが合っていないと**起動時に `<プレフィックス>/COOKIE_SECRET is not set` で落ちる**。
 >
-> ローカル開発は `IS_LOCAL_DEVELOPMENT=true`(`docker/docker-compose.local.yml`)で、**AWS へは一切接続しない**。開発コンテナに `AWS_PROFILE` を設定していないためで、これは **MinIO 用の静的キー(`AWS_ACCESS_KEY_ID`)が資格情報チェーンでプロファイルに負けるのを避ける**ため。terraform は各環境の `.envrc` が、`deploy/*.sh` は自前で `AWS_PROFILE` を `export` するので、コンテナ全体に設定する必要はない。
+> ローカル開発は `IS_LOCAL_DEVELOPMENT=true`(`docker/docker-compose.local.yml`)で、**AWS へは一切接続しない**(SSO でログイン済みかどうかに関係なく `~/.ssm-keys.json` を読む)。`AWS_PROFILE` をコンテナ全体には設定せず、terraform は各環境の `.envrc` が、`deploy/*.sh` は自前で `export` する。
+>
+> MinIO の資格情報は **`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`** で渡す。**`AWS_ACCESS_KEY_ID` という名前にしないこと** — 環境変数は AWS の資格情報チェーンでプロファイルより優先されるため、同じコンテナ内の `aws` CLI / terraform が MinIO のダミーを使って `InvalidClientTokenId` で失敗する(詳細は `backend/src/config.ts` の `S3_CREDENTIALS`)。
 
 ## 立ち上げ
 

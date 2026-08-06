@@ -54,10 +54,9 @@ services:
       - AWS_DEFAULT_REGION=ap-northeast-1
       # local 実行環境特有の設定
       - IS_LOCAL_DEVELOPMENT=true
-      # AWS_PROFILE はここでは設定しない。設定すると AWS SDK の資格情報チェーンが
-      # プロファイルを優先し、上の AWS_ACCESS_KEY_ID(MinIO 用)が無視される。
-      # terraform は各環境の .envrc が、deploy スクリプトは自前で export するので、
-      # コンテナ全体に設定する必要はない
+      # AWS_PROFILE はここでは設定しない。terraform は各環境の .envrc が、
+      # deploy スクリプトは自前で export するので、コンテナ全体に設定する必要がないため。
+      # (MinIO の資格情報を S3_ 接頭辞に分離したので、設定しても衝突はしない)
       - SLACK_NOTICE_WEBHOOK_URL=https://hooks.slack.com/services/***/***/***
     volumes:
       # ホスト clone は compose 操作・イメージビルド・受け渡し(git remote "host")専用。
