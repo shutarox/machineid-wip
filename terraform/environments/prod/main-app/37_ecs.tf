@@ -25,7 +25,17 @@ resource "aws_cloudwatch_log_group" "app" {
 #================================================= タスク定義
 
 resource "aws_ecs_task_definition" "main" {
-  family                   = "${local.name_prefix}-task"
+  family = "${local.name_prefix}-task"
+
+  # **古いリビジョンを deregister させない。**
+  # 既定では、新しいリビジョンを登録するときに terraform が前のリビジョンを
+  # DeregisterTaskDefinition する。その結果 ACTIVE なリビジョンが常に 1 本だけになり、
+  # **`deploy/rollback.sh`(update-service で前のリビジョンへ戻す)が成立しない**
+  # (実測: リビジョン 1〜4 がすべて INACTIVE になっていた)。
+  # ADR docs/decisions/20260806-deploy-and-scheduled-jobs.md の
+  # 「ロールバックは update-service だけで完結する」はこれが前提。
+  skip_destroy = true
+
   network_mode             = "awsvpc"
   requires_compatibilities = ["FARGATE"]
 
@@ -98,7 +108,11 @@ resource "aws_ecs_task_definition" "main" {
           valueFrom = "${local.ssm_prefix}/DB_URL"
         },
         {
-          # /etc/environment へ転記しないので APPX_ 接頭辞は付けない
+          # **`APPX_` を付けないのは意図的。** entrypoint(etc/onstart-prod-main.sh)が
+          # これを読んで appuser の ~/.pgpass を生成する用途にだけ使い、
+          # **appuser の環境変数には置かない**(アプリは DB_URL しか見ない)。
+          # ECS Exec で入って `su - appuser` → `psql -h $DB_HOST -U postgres machineid` が
+          # パスワード入力なしで通るようにするためのもの。
           name      = "DB_PASSWORD"
           valueFrom = "${local.ssm_prefix}/DB_PASSWORD"
         },

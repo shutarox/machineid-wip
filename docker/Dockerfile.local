@@ -107,6 +107,18 @@ RUN apt-get update && \
     ./aws/install && \
     rm -rf aws awscliv2.zip
 
+# Session Manager プラグイン。
+# **AWS CLI には同梱されていない**(AWS が別配布のバイナリとして出している)。
+# `aws ecs execute-command --interactive` は、セッションの発行までを CLI が行い、
+# **端末の双方向ストリーミング(WebSocket)をこのプラグインに引き渡す**ため、
+# 無いと本番コンテナへシェルで入れない(踏み台サーバを置かない構成の要)。
+#
+# デプロイ・run-task・ロールバックには不要 — 中に入って調べるときだけ要る。
+RUN curl -fsSL "https://s3.amazonaws.com/session-manager-downloads/plugin/latest/ubuntu_arm64/session-manager-plugin.deb" \
+        -o session-manager-plugin.deb && \
+    dpkg -i session-manager-plugin.deb && \
+    rm -f session-manager-plugin.deb
+
 # その他の設定
 RUN npm install -g pm2 pnpm@10.7.1 \
     && pnpm config set script-shell /bin/bash \
