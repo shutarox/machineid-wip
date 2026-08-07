@@ -341,6 +341,53 @@ Arn: arn:aws:sts::439996178164:assumed-role/AWSReservedSSO_AdministratorAccess_.
 | ログ保持 | 無期限 | **30 日** |
 | ECR | ライフサイクルなし | **直近 10 イメージ** |
 
+#### apply 実施記録(2026-08-07)
+
+**`iam` / `base` / `main` を apply 済み。`.tf` の修正は 1 箇所も不要だった。**
+
+| スタック | 結果 |
+|---|---|
+| `iam` | **6 リソース**(ECS タスク実行 / タスク / EventBridge のロール) |
+| `base` | **28 リソース**(VPC・サブネット 4・IGW・ルートテーブル 2・SG 3 + ルール 5・S3 Gateway エンドポイント・内部ゾーン・公開ゾーン・RDS PostgreSQL 18) |
+| `main` | **26 リソース**(先行 10 = ECR・S3 ×2、委任後 16 = ACM ×2・CloudFront・ALB・公開レコード) |
+| `main-app` | **未実施**。`var.ecr_digest` が必須で、ECR に最初のイメージが要る |
+
+| 主要な ID | 値 |
+|---|---|
+| VPC | `vpc-0381aa84f4f64be34` |
+| RDS | `machineid-prod-pg.c70uqkw64d4y.ap-northeast-1.rds.amazonaws.com`(アプリからは `db-pg.prod.internal`) |
+| ECR | `439996178164.dkr.ecr.ap-northeast-1.amazonaws.com/machineid-app-prod` |
+| CloudFront | `E3ARCG9SOD4FO3` |
+| SG | alb `sg-0e5df1beebd281436` / app `sg-0295a8a7f3457a70d` / rds `sg-0f92ad6e92a0e95d5` |
+
+疎通確認(2026-08-07):
+
+| 対象 | 結果 |
+|---|---|
+| `https://machineid.kas.jp/` | **403**(S3 が空)・**証明書検証 OK** |
+| `https://api.machineid.kas.jp/api/ping` | **503**(ターゲット無し)・**証明書検証 OK** |
+| `http://api.machineid.kas.jp/` | **301 → HTTPS** |
+
+##### 手順の要点
+
+- **tfstate バケットは terraform では作れない**(backend の init 時に存在が必要)。CLI で先に作成し、
+  バージョニング / パブリックアクセスブロック / SSE-S3 / 非現行 90 日削除を設定した
+- **NS 委任を挟むため `main` は 2 回に分けた**。委任と無関係な ECR・S3 は `-target` で先行作成し、
+  委任の伝播後に残り 16 リソースを通常 apply した
+- **`terraform` コマンドは既定の権限では実行できない**(`plan` すらブロックされる)。
+  `.claude/settings.json` に `Bash(terraform ...)` の allow を追加した。**`destroy` は deny のまま**
+- **SSO セッションは 8 時間で切れる**。切れたら `aws sso login --sso-session machineid --use-device-code --no-browser`
+
+##### SSM パラメータ(`/machineid-keys/`)
+
+`DB_PASSWORD` / `DB_URL` / `COOKIE_SECRET` / `CRYPTO_SECRET` / `SES_SMTP_USER` / `SES_SMTP_PASS` /
+`MASTER_SECRET` / `MASTER_IP_WHITELIST` を **SecureString** で登録済み。
+
+- `DB_PASSWORD` は生成から保存まで表示せず、terraform へは SSM から読んで `TF_VAR_` で渡した
+- **`DB_URL` はマスターユーザ `postgres` で作っている。** RDS に他のユーザが存在せず、
+  private サブネットにいるため接続手段自体がまだ無い。**最小権限の `appuser` への切り替えは
+  `main-app` 到達後の課題**(`backend/prisma/createuser.sql` は MySQL 用の残骸だったので削除済み)
+
 ### 2. ネットワーク(`prod/base`)
 
 - `14_nat_gateway.tf` と NAT 用 `aws_eip` を**削除**

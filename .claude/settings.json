@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(terraform init:*)",
+      "Bash(terraform validate:*)",
+      "Bash(terraform fmt:*)",
+      "Bash(terraform plan:*)",
+      "Bash(terraform output:*)",
+      "Bash(terraform show:*)",
+      "Bash(terraform apply:*)"
+    ],
+    "deny": [
+      "Bash(terraform destroy:*)",
+      "Bash(terraform apply -destroy:*)"
+    ]
+  }
+}
