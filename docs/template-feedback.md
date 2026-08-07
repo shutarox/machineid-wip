@@ -37,9 +37,12 @@
 | 10 | **`etc/onstart-prod-main.sh` の `exec su - appuser` がログインシェルなので、環境変数がほぼすべて捨てられる。** `APPX_` 接頭辞付きのものだけが `/etc/environment` に転記されて生き残る仕組みだが、**それを知らずに素の環境変数をタスク定義に足すと黙って消える**(`NODE_EXTRA_CA_CERTS` で実際に踏んだ)。Dockerfile の `ENV` も同様に効かない | 2026-08-07 |
 | 11 | **`/api/ping` がテナント 0 件で 500 を返す。** ALB のヘルスチェックがこれを見るため、**シード前の環境は恒久的に unhealthy** になり、ECS がタスクを起動・停止し続ける。DB 疎通確認にデータの存在を要求している設計 | 2026-08-07 |
 
+| 12 | **`reloadReservation` が API の公開契約に残っている。** `backend/src/libs/commonSchemas.ts` の `responseActions` の先頭にあり、`commonErrorsSchema` 経由で**全エラーレスポンスの型に入る**ため、生成 OpenAPI 型(`frontend/src/generated/openapi-schema.d.ts`)に 9 箇所以上伝播している。**旧プロダクトの予約ドメイン由来**で、サーバ側に送出箇所は無く、フロントの `queryClient.ts` も処理していない(扱うのは `forceLogout` / `historyBack` / `reloadApp` の 3 つ)。**完全な死語だが、API を読んだ人は予約機能を探すことになる** | 2026-08-07 |
+| 13 | **`backend/script/prepare_locks.ts` のロック名が旧プロダクトのドメイン語。** `const lockNames = ['sharedAssignment', 'reservation']`(共有割り当て / 予約)。**このスクリプト自体どこからも参照されておらず**、`editLock` を使っているのもテストの `factories.ts` だけでアプリ本体に利用箇所が無い。`getLock` の仕組みは雛形の機能として残す価値があるが(ADR に登場する)、**ロック名は案件ごとに定義するもの**なので、雛形には具体名を置かず「ここに案件のロック名を書く」形にすべき | 2026-08-07 |
+
 ### 派生手順そのものへの追記(`myapp` の計画側に反映)
 
 | # | 内容 |
 |---|---|
-| 12 | **手順 2 で公開ポートを変えたら、compose の `environment` にある `SPA_APP_BASE_URL` / `API_SERVER_BASE_URL` / `VITE_API_SERVER_BASE_URL` も同じ値に揃える。** `ports:` だけ変えると、ホストからのアクセスとアプリが認識する URL が食い違う(実際に 8801/8081 のまま残っていた) |
-| 13 | **手順 3 の削ぎ落とし対象にブランド資産と `CLAUDE.md` / `README.md` の視点変更を明記する**(上記 4 と、手順 3 の表に追加済みの行) |
+| 14 | **手順 2 で公開ポートを変えたら、compose の `environment` にある `SPA_APP_BASE_URL` / `API_SERVER_BASE_URL` / `VITE_API_SERVER_BASE_URL` も同じ値に揃える。** `ports:` だけ変えると、ホストからのアクセスとアプリが認識する URL が食い違う(実際に 8801/8081 のまま残っていた) |
+| 15 | **手順 3 の削ぎ落とし対象にブランド資産と `CLAUDE.md` / `README.md` の視点変更を明記する**(上記 4 と、手順 3 の表に追加済みの行) |
