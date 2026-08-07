@@ -71,6 +71,7 @@
 
 | 16 | **`deploy/notify_slack.sh` が通知の失敗を握りつぶす。** `curl ... || echo "failed"` は**トランスポート層の失敗でしか発火しない**ため、プレースホルダや失効した webhook に POST しても HTTP 302 / 404 が返るだけで**成功扱いになる**(実測)。しかも「未設定ならスキップ」の分岐があるので、**プレースホルダが入っている状態は未設定より悪い**(スキップの表示すら出ない)。`--fail` を付けるか `%{http_code}` を検査して 2xx 以外を警告する | 2026-08-07 |
 | 17 | **`pnpm build` がテストコードを本番成果物に含める。** `tsconfig.json` の `include` に `test/**/*` と `vitest.config.ts` があり、`rootDir: "."` なので `build/test/` と `build/vitest.config.js` ができる。`Dockerfile.prod-main` は `build/` をまるごと運ぶため**本番イメージにテストが焼き込まれる**。容量だけでなく、`script/test/mailtest.ts` の系統(雛形の履歴で SES 認証情報が直書きされていたファイル)を本番に載せない意味もある。**`tsconfig.build.json` を分けて `include` を `src` + `script` に絞る**(`machineid` 側で対応済み。差分をそのまま持っていける)。あわせて `rootDirs`(複数形)は効いておらず、外しても型検査が通ることを確認した | 2026-08-07 |
+| 18 | **`terraform.example/` に旧案件の実 AWS アカウントの DNS レコード値が残っている。** 2026-08-04 の汎用化はドメイン**名**(`soramed.jp` → `myappdomain.com`)を置換したが、**レコードの値**は置換対象に入っていなかった。残っているのは `common/base/16_route53.ses.tf` の SES DKIM トークン 3 件、`common/base/16_route53.search-console.tf` の Google Search Console 検証トークンと `7vod2qiq2b5z.…` サブドメイン、`common/base/16_route53.subdomains.tf` の委任サブゾーンの NS レコード 8 件、`{dev,prod}/util/01_variables.tf` の ACM 検証 CNAME ホスト名。**秘密ではない**(DNS で公開されており誰でも `dig` で引ける)が、雛形としては無意味かつ適用すると誤り。**検出は案件名の grep では不可能**で、ドメイン形式の総なめで初めて出た(`machineid` 側は `terraform.example/` ごと削除するため対応不要) | 2026-08-07 |
 
 ### 派生手順そのものへの追記(`myapp` の計画側に反映)
 
