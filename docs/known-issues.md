@@ -103,7 +103,7 @@
 - 対象: `deploy/notify_slack.sh` / `docker/docker-compose.local.yml`
 - **まっさら化の後に設定する**(この台帳は残るので、そこで拾う)
 
-**症状**: `SLACK_NOTICE_WEBHOOK_URL` が実在する webhook になっていない。
+**症状**: `SLACK_WEBHOOK_URL` が実在する webhook になっていない。
 
 - 開発コンテナには compose が**プレースホルダ**を入れている(`https://hooks.slack.com/services/***/***/***`)
 - **本番の ECS タスク定義には入っていない**(アプリ側は使っておらず、使うのは `deploy/*.sh` だけ)
@@ -126,9 +126,15 @@ $ curl -s -o /dev/null -w "%{http_code}" -X POST ... "https://hooks.slack.com/se
 
 **見送り理由**: 運用者が実質 1 名で、デプロイは対話的に実行して結果を目で見ているため。
 
+**監視 Lambda の側は配線済み**(2026-08-07)。`terraform/environments/prod/main-app/38_monitoring.tf`
+の 2 つの Lambda は SSM の `/machineid-keys/SLACK_WEBHOOK_URL` を実行時に読み、
+**未設定なら無送信で正常終了する**。つまりこの項目でやることは、Lambda については
+「SSM にパラメータを 1 つ作る」だけになった(コード・terraform の変更は不要)。
+`deploy/*.sh` 側は下記 2・3 が残っている。
+
 **対応するときの方針**:
 
-1. 実在する Incoming Webhook を作り、**SSM の SecureString**(`/<project>-keys/SLACK_NOTICE_WEBHOOK_URL`)に置く
+1. 実在する Incoming Webhook を作り、**SSM の SecureString**(`/<project>-keys/SLACK_WEBHOOK_URL`)に置く
    — compose に直書きすると雛形の履歴に残る(**過去に実際に webhook URL が履歴へ混入している**。
    `docs/plans/20260806-derive-first-project.md` の「秘密情報の混入」)
 2. `deploy/*.sh` は実行時に SSM から取得する(`aws ssm get-parameter`)

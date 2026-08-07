@@ -13,6 +13,12 @@ terraform {
       source  = "hashicorp/aws"
       version = "~> 6.0"
     }
+
+    # 監視 Lambda の zip を作る(38_monitoring.tf)
+    archive = {
+      source  = "hashicorp/archive"
+      version = "~> 2.0"
+    }
   }
 
   backend "s3" {
@@ -100,4 +106,9 @@ locals {
   url_host_name_api = "api.${var.domain_name}"
 
   ssm_prefix = "arn:aws:ssm:${var.aws_region}:${var.aws_account_id}:parameter/${var.project_name}-keys"
+
+  # 監視 Lambda が実行時に読む Slack webhook。**値は terraform で持たない**
+  slack_webhook_ssm_parameter = "/${var.project_name}-keys/SLACK_WEBHOOK_URL"
+
+  lambda_source_dir = "${path.module}/../../../../backend/lambda"
 }

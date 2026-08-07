@@ -1,7 +1,42 @@
 const https = require('https');
+const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
 
-// 環境変数
-const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
+// Slack の webhook URL は **SSM の SecureString から実行時に読む**。
+// terraform の変数や Lambda の環境変数に入れると tfstate や git に平文で残るため
+// (雛形では実際に webhook URL が git 履歴へ混入した経緯がある)。
+//
+// **未設定・空・読めない場合は何も送らずに正常終了する。**
+// webhook を設定する前でも監視の配線だけ先に入れておけるようにするため。
+const SLACK_WEBHOOK_SSM_PARAMETER = process.env.SLACK_WEBHOOK_SSM_PARAMETER;
+
+const ssm = new SSMClient({});
+/** 取得できた値だけキャッシュする(未設定のまま覚えると、後から設定しても拾えない) */
+let cachedWebhookUrl = '';
+
+async function getSlackWebhookUrl() {
+  if (cachedWebhookUrl) {
+    return cachedWebhookUrl;
+  }
+  if (!SLACK_WEBHOOK_SSM_PARAMETER) {
+    return '';
+  }
+  try {
+    const res = await ssm.send(
+      new GetParameterCommand({
+        Name: SLACK_WEBHOOK_SSM_PARAMETER,
+        WithDecryption: true,
+      })
+    );
+    cachedWebhookUrl = (res.Parameter?.Value ?? '').trim();
+  } catch (error) {
+    // パラメータ未作成でも監視そのものは落とさない
+    console.warn(
+      `SSM ${SLACK_WEBHOOK_SSM_PARAMETER} を読めませんでした: ${error.name}`
+    );
+    return '';
+  }
+  return cachedWebhookUrl;
+}
 
 /**
  * Lambda関数のメイン処理
@@ -71,7 +106,16 @@ exports.handler = async (event) => {
     ];
 
     // Slackに通知
-    await sendSlackNotification(blocks);
+    const webhookUrl = await getSlackWebhookUrl();
+    if (!webhookUrl) {
+      console.log('Slack webhook が未設定のため送信しません');
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ message: 'Slack webhook not configured' }),
+      };
+    }
+
+    await sendSlackNotification(blocks, webhookUrl);
     console.log('Slack通知を送信しました');
 
     return {
@@ -90,7 +134,7 @@ exports.handler = async (event) => {
 /**
  * Slackに通知を送信
  */
-async function sendSlackNotification(blocks) {
+async function sendSlackNotification(blocks, webhookUrl) {
   const payload = {
     blocks: blocks,
     username: 'ALB Health Monitor',
@@ -108,7 +152,7 @@ async function sendSlackNotification(blocks) {
       },
     };
 
-    const req = https.request(SLACK_WEBHOOK_URL, options, (res) => {
+    const req = https.request(webhookUrl, options, (res) => {
       let data = '';
       res.on('data', (chunk) => {
         data += chunk;

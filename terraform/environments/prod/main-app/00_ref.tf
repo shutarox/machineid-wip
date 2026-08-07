@@ -52,3 +52,11 @@ data "aws_ecr_repository" "main" {
 data "aws_lb_target_group" "api" {
   name = "${local.name_prefix}-tg-api"
 }
+
+data "aws_lb" "main" {
+  name = "${local.name_prefix}-alb"
+}
+
+data "aws_iam_role" "lambda_monitoring" {
+  name = "${local.name_prefix}-lambda-monitoring-role"
+}

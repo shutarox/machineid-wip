@@ -98,6 +98,10 @@ put SES_SMTP_USER       '...'
 put SES_SMTP_PASS       '...'
 put MASTER_SECRET       '...'
 put MASTER_IP_WHITELIST '...'
+
+# 監視 Lambda の Slack 通知先。**任意**(未設定なら Lambda は無送信で正常終了する)。
+# terraform には値を渡さず、Lambda が実行時にここを読む
+put SLACK_WEBHOOK_URL 'https://hooks.slack.com/services/...'
 ```
 
 ### 4. `base` を apply(VPC / SG / RDS / 公開ゾーン)

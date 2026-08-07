@@ -151,3 +151,62 @@ resource "aws_iam_role" "eventbridge_ecs" {
 # ポリシー本体(RunTask 対象のクラスタ / タスク定義に依存する)は
 # main-app スタック側で aws_iam_role_policy として貼る。
 # ここではロールだけ作り、参照を一方向(main-app → iam)に保つ
+
+#================================================= 監視 Lambda
+#
+# ECS のエラーログと CloudWatch アラームを Slack へ流す 2 つの Lambda が使う
+# (`main-app/38_monitoring.tf`)。**アプリのデータには一切触らない**ので、
+# 権限はログ出力と Slack webhook の読み取りだけに絞る。
+
+data "aws_iam_policy_document" "lambda_assume" {
+  statement {
+    actions = ["sts:AssumeRole"]
+
+    principals {
+      type        = "Service"
+      identifiers = ["lambda.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "lambda_monitoring" {
+  name               = "${local.name_prefix}-lambda-monitoring-role"
+  assume_role_policy = data.aws_iam_policy_document.lambda_assume.json
+
+  tags = {
+    Name = "lambda-monitoring-role"
+  }
+}
+
+resource "aws_iam_role_policy_attachment" "lambda_monitoring_basic" {
+  role       = aws_iam_role.lambda_monitoring.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+
+# **webhook URL は Lambda が実行時に SSM から読む。**
+# terraform の変数や Lambda の環境変数に値を入れると tfstate に平文で残るため
+# (雛形では実際に webhook URL が git 履歴へ混入した)。
+# ECS タスク実行ロールと違い `GetParameter`(単数)を使う
+data "aws_iam_policy_document" "lambda_monitoring_ssm" {
+  statement {
+    actions   = ["ssm:GetParameter"]
+    resources = [local.ssm_key_arn]
+  }
+
+  statement {
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+
+    condition {
+      test     = "StringEquals"
+      variable = "kms:EncryptionContext:PARAMETER_ARN"
+      values   = [local.ssm_key_arn]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "lambda_monitoring_ssm" {
+  name   = "${local.name_prefix}-lambda-monitoring-ssm"
+  role   = aws_iam_role.lambda_monitoring.id
+  policy = data.aws_iam_policy_document.lambda_monitoring_ssm.json
+}

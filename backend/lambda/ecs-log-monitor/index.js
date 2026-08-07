@@ -1,10 +1,47 @@
 const https = require('https');
 const zlib = require('zlib');
+const { SSMClient, GetParameterCommand } = require('@aws-sdk/client-ssm');
 
 // 環境変数
-const SLACK_WEBHOOK_URL = process.env.SLACK_WEBHOOK_URL;
 const NOTIFICATION_INTERVAL_MINUTES =
   parseInt(process.env.NOTIFICATION_INTERVAL_MINUTES) || 10;
+
+// Slack の webhook URL は **SSM の SecureString から実行時に読む**。
+// terraform の変数や Lambda の環境変数に入れると tfstate や git に平文で残るため
+// (雛形では実際に webhook URL が git 履歴へ混入した経緯がある)。
+//
+// **未設定・空・読めない場合は何も送らずに正常終了する。**
+// webhook を設定する前でも監視の配線だけ先に入れておけるようにするため。
+const SLACK_WEBHOOK_SSM_PARAMETER = process.env.SLACK_WEBHOOK_SSM_PARAMETER;
+
+const ssm = new SSMClient({});
+/** 取得できた値だけキャッシュする(未設定のまま覚えると、後から設定しても拾えない) */
+let cachedWebhookUrl = '';
+
+async function getSlackWebhookUrl() {
+  if (cachedWebhookUrl) {
+    return cachedWebhookUrl;
+  }
+  if (!SLACK_WEBHOOK_SSM_PARAMETER) {
+    return '';
+  }
+  try {
+    const res = await ssm.send(
+      new GetParameterCommand({
+        Name: SLACK_WEBHOOK_SSM_PARAMETER,
+        WithDecryption: true,
+      })
+    );
+    cachedWebhookUrl = (res.Parameter?.Value ?? '').trim();
+  } catch (error) {
+    // パラメータ未作成でも監視そのものは落とさない
+    console.warn(
+      `SSM ${SLACK_WEBHOOK_SSM_PARAMETER} を読めませんでした: ${error.name}`
+    );
+    return '';
+  }
+  return cachedWebhookUrl;
+}
 
 // メモリ内バッファ（通知制御用）
 const notificationBuffer = new Map();
@@ -54,10 +91,17 @@ exports.handler = async (event) => {
 
     // Slackに通知
     if (notificationsToSend.length > 0) {
-      await sendSlackNotification(notificationsToSend);
-      console.log(
-        `${notificationsToSend.length} 件のエラー通知をSlackに送信しました`
-      );
+      const webhookUrl = await getSlackWebhookUrl();
+      if (webhookUrl) {
+        await sendSlackNotification(notificationsToSend, webhookUrl);
+        console.log(
+          `${notificationsToSend.length} 件のエラー通知をSlackに送信しました`
+        );
+      } else {
+        console.log(
+          `Slack webhook が未設定のため送信しません(${notificationsToSend.length} 件)`
+        );
+      }
     } else {
       console.log('通知制御により、Slack通知は送信されませんでした');
     }
@@ -143,7 +187,7 @@ function recordNotificationTime(errorContent) {
 /**
  * Slackに通知を送信
  */
-async function sendSlackNotification(notifications) {
+async function sendSlackNotification(notifications, webhookUrl) {
   const blocks = [
     {
       type: 'header',
@@ -203,7 +247,7 @@ async function sendSlackNotification(notifications) {
       },
     };
 
-    const req = https.request(SLACK_WEBHOOK_URL, options, (res) => {
+    const req = https.request(webhookUrl, options, (res) => {
       let data = '';
       res.on('data', (chunk) => {
         data += chunk;
