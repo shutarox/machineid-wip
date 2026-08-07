@@ -1,7 +1,7 @@
 # ADR: 日時はワイヤー上 JST 正準形の文字列で貫き、自動 Date 変換をしない
 
 - 状態: **採用**(2026-07-13、3c / 2026-08-03、3d で完成)
-- 関連: `docs/template-repo-workplan.md` の 3c / 3d、`docs/plans/20260803-tanstack-query-plan.md` §4
+- 関連: `docs/plans/20260803-tanstack-query-plan.md` §4、`backend/src/libs/zDate.ts`(ルートスキーマの入口)
 
 ## 背景
 

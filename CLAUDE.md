@@ -16,7 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **まっさら化の前に完了させるもの**: AWS 基本設定(terraform)/ アプリの要件そぎ落とし / **ドキュメントの案件化** / 痕跡・秘密情報の検査。
 
-そのため、**docs には雛形(`myapp`)としての記述がまだ残っている**。「この雛形は」「案件で使うときは」という視点の文章を見つけたら、それは**書き換え対象の残骸**であって現行の方針ではない。特に `docs/template-repo-workplan.md` と `docs/plans/` の大半は雛形を作った経緯の記録で、まっさら化のときに削除する。
+そのため、**docs には雛形(`myapp`)としての記述がまだ残っている**。「この雛形は」「案件で使うときは」という視点の文章を見つけたら、それは**書き換え対象の残骸**であって現行の方針ではない。雛形を作った経緯の記録は削除済みで、`docs/plans/` に残っているのは方針に依存しない実装計画だけ。
 
 **雛形側の不備を見つけたら `docs/template-feedback.md` に追記すること。** 派生側の git 履歴は捨てるので、書き残さないと `myapp` に戻せない。**この台帳はまっさら化後も残す**(還元は 1 回で終わらないため)。
 
@@ -36,7 +36,7 @@ DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コン�
 | 環境を立ち上げる | `README.md` / `docs/dev-container.md` |
 | 未対応と分かっている問題を知る | `docs/known-issues.md` |
 | **雛形(`myapp`)の不備を見つけた** | `docs/template-feedback.md` に追記(**まっさら化後も残す台帳**) |
-| **過去にエージェントが踏んだ罠を知る** | `docs/template-repo-workplan.md` の**受け入れテスト実施記録**(前任者が詰まった箇所の一覧) |
+| **過去にエージェントが踏んだ罠を知る** | `docs/agent-traps.md`(受け入れテストで前任者が詰まった箇所の一覧) |
 | まっさら化までの段取り・現在地を知る | `docs/plans/20260806-derive-first-project.md` |
 | AWS 本番環境を作る | `docs/plans/20260806-aws-prod-setup.md`(決定は `docs/decisions/20260806-aws-*.md`) |
 
@@ -86,7 +86,7 @@ backend/test/integration/routes/api/private/users.*.test.ts  ルートテスト(
 frontend/src/pages/UsersAdmin.tsx                          画面
 ```
 
-users CRUD が持っていない要素(**ファイルアップロード・DELETE ルート・ロールによる行レベルの可視範囲**)は、報告書 CRUD が見本になる。判断の経緯は `docs/plans/20260805-s3-image-upload.md`。
+users CRUD が持っていない要素(**ファイルアップロード・DELETE ルート・ロールによる行レベルの可視範囲**)は、報告書 CRUD が見本になる。判断の経緯は `docs/decisions/20260805-file-upload.md`。
 
 ```
 backend/src/routes/api/private/uploadedImages.{POST,DELETE}.ts  multipart 受け取り・仮アップロード
@@ -260,6 +260,6 @@ Vitest + 実 PG 統合テスト + Playwright E2E(ADR `20260710-test-strategy.md`
 | 設計判断の記録(ADR) | `docs/decisions/`(索引は `docs/decisions/README.md`) |
 | 個別フェーズの実装計画 | `docs/plans/` |
 | 把握済みだが未対応の論点 | `docs/known-issues.md` |
-| 雛形化の作業計画 | `docs/template-repo-workplan.md` |
+| エージェントが踏んだ罠の記録 | `docs/agent-traps.md` |
 | ローカル開発用 docker compose | `docker/docker-compose.local.yml` |
 | 開発コンテナの構成・運用手順 | `docs/dev-container.md` |

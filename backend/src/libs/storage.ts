@@ -20,7 +20,7 @@ import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 // **パスにテナントを含めない**方針(アップロード時点で tenantId が確定しない
 // ユーザがありうるため)。アクセス制御は presigned URL を発行する前の DB 検査で行う
 // ので、キーの構造はセキュリティ境界ではない。判断は
-// `docs/plans/20260805-s3-image-upload.md`。
+// `docs/decisions/20260805-file-upload.md`。
 
 export type Storage = {
   /** オブジェクトを置く(同じキーなら上書き) */

@@ -1,7 +1,7 @@
 # ADR: CLAUDE.md は判断基準だけを持ち、手順は `.claude/skills/` に置く
 
 - 状態: **採用**(2026-08-04)
-- 関連: `docs/plans/20260804-claude-md-restructure.md`、`docs/template-repo-workplan.md` の 4-2
+- 関連: `docs/agent-traps.md`(この再構成の根拠になった受け入れテストの記録)
 
 ## 背景
 

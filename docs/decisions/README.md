@@ -28,6 +28,7 @@ YYYYMMDD-<slug>.md      例: 20260713-datetime-design.md
 | 2026-08-04 | [dev サーバは `tsx watch` で直接実行し、型検査を並走させる](20260804-dev-server.md) |
 | 2026-08-04 | [CLAUDE.md は判断基準だけを持ち、手順は `.claude/skills/` に置く](20260804-agent-docs-structure.md) |
 | 2026-08-04 | [セッションはアイドル失効 + 延長方式とし、絶対失効は入れない](20260804-session-lifetime.md) |
+| 2026-08-05 | [ファイルアップロードは API 経由の同期処理とし、仮アップロード + タイムアウト回収で確定させる](20260805-file-upload.md) |
 | 2026-08-06 | [本番 1 環境の最小構成とし、常駐ユーティリティサーバ・NAT Gateway・Aurora を置かない](20260806-aws-minimal-prod.md) |
 | 2026-08-06 | [サービスのイメージ更新を terraform の外に出し、マイグレーションとスクリプトは run-task、定期実行は API プロセス内のスケジューラで回す](20260806-deploy-and-scheduled-jobs.md) |
 
@@ -36,7 +37,7 @@ YYYYMMDD-<slug>.md      例: 20260713-datetime-design.md
 | 場所 | 内容 |
 |---|---|
 | `CLAUDE.md` | 全体地図と、日々の作業で参照する規約 |
-| `docs/template-repo-workplan.md` | 雛形化の作業計画と実施記録(フェーズごとの経緯) |
+| `docs/agent-traps.md` | 受け入れテストでエージェントが実際に詰まった箇所と、その対処 |
 | `docs/plans/` | 個別フェーズの実装計画(実施手順の記録。決定そのものは ADR 側にある)。同じ `YYYYMMDD-<slug>.md` 規約 |
 | `docs/known-issues.md` | 把握しているが現時点では対応しないと判断した論点の台帳 |
 | `docs/dev-container.md` | 開発コンテナの構成と運用手順 |

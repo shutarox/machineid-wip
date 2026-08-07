@@ -2,7 +2,7 @@
 
 - 状態: **採用**(2026-08-04)
 - 対象: `backend/script/dev-watch.sh`
-- 関連: `playwright.config.ts`(E2E のバックエンド起動)、`docs/template-repo-workplan.md`(Phase 4 の受け入れテスト)
+- 関連: `playwright.config.ts`(E2E のバックエンド起動)、`docs/agent-traps.md`(この問題を発見した受け入れテストの記録)
 
 ## 背景
 

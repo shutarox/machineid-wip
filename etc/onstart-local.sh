@@ -31,10 +31,7 @@ cp -a ~/app/docker/home-appuser-local/. ~/
 echo "*:*:*:appuser:${DB_PASSWORD}" > ~/.pgpass
 chmod 600 ~/.pgpass
 
-direnv allow ~/app/terraform.example/environments/dev
-direnv allow ~/app/terraform.example/environments/dev/iam
-direnv allow ~/app/terraform.example/environments/prod
-direnv allow ~/app/terraform.example/environments/prod/iam
+direnv allow ~/app/terraform/environments/prod
 
 cd ~/app/backend
 pnpm install

@@ -17,8 +17,9 @@
 理由: 台帳の項目の大半は「雛形が Prisma 7 / pnpm workspace 移行に追随できていない」ことに起因し、
 **個別に PR を作る作業は結局この差分を再現する作業**になるため。二度手間を避ける。
 
-前例がある。`opepro` → `myapp` がまさに「動いている案件を雛形の初期状態にする」だった
-(`docs/template-repo-workplan.md`。57 ファイル / 96 箇所の置換 + ドメインのプレースホルダ化 40 ファイル / 82 箇所)。
+前例がある。旧案件 → `myapp` がまさに「動いている案件を雛形の初期状態にする」だった
+(57 ファイル / 96 箇所の置換 + ドメインのプレースホルダ化 40 ファイル / 82 箇所。
+**経緯を書いた作業計画は `machineid` 側では削除済み**だが、`myapp` には残っている)。
 **それでも取りこぼしが残った** — 今回見つけた項目 3(`deploy/` に旧案件の実値)、12(`reloadReservation`)、
 13(`prepare_locks.ts`)がそれ。**同じ方式を、取りこぼしを知った状態でやる。**
 
@@ -56,7 +57,7 @@
 |---|---|---|
 | 1 | **`Dockerfile.prod-main` / `dev-main` で本番マイグレーションが実行できない。** 最終ステージに `prisma/schema.prisma` しかコピーしておらず、`prisma/migrations/`・`prisma/schema.prisma.generated`・`prisma.config.ts` が無い。`datasource db` に `url` が書かれておらず接続先が `prisma.config.ts` 由来なので、3 つとも必要 | 2026-08-06 AWS 構成の検討中 |
 | 2 | **`terraform.example` の EventBridge ターゲットがリビジョン固定の ARN を参照している**(`aws_ecs_task_definition.main.arn`)。デプロイしても定期実行だけ古いイメージで走り続ける。`arn_without_revision` にすべき | 同上 |
-| 3 | **`deploy/deploy_prod-main.sh` に旧案件の実値が残っている。** `aws_account_id="756074065984"` と `cloudfront_distribution_id="E3TDM7MGWEED1K"`。手順 4 の痕跡検査は `docs/` と `terraform.example/` を見ていたが、**`deploy/` も対象**にすべき | 同上 |
+| 3 | **`deploy/deploy_prod-main.sh` に旧案件の実値が残っている。** **旧案件の実 AWS アカウント ID と CloudFront ディストリビューション ID が変数の既定値に直書き**されている(値はここには書かない)。手順 4 の痕跡検査は `docs/` と `terraform.example/` を見ていたが、**`deploy/` も対象**にすべき | 同上 |
 | 4 | **ブランド資産が前プロダクトのまま。** `frontend/public/favicon.ico` / `apple-touch-icon.png` が teal(`#319795`)の旧アイコンだった。雛形としては中立な資産にするか、少なくとも「差し替え必須」の一覧に載せる。あわせて `index.html` の `<link rel="icon" type="image/svg+xml">` が実体(.ico)と食い違っていた | 2026-08-06 |
 | 5 | **ホスト clone の `receive.denyCurrentBranch updateInstead` が未設定だと最初の `git push -f host` が拒否される。** `docs/dev-container.md` に「事前設定(一度だけ)」として書いてはあるが、派生時に新しいホスト clone を作ると未実施になる。手順 2 のチェック項目に入れる | 2026-08-06 |
 | 6 | **開発コンテナの MinIO 用環境変数が AWS の資格情報を潰す。** `docker-compose.local.yml` が `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` をコンテナ全体に設定しており、**環境変数はプロファイルより優先される**ため、コンテナ内の `aws` コマンドが常に `minioadmin` を使って `InvalidClientTokenId` で失敗する(実測)。`deploy/*.sh` の `aws ecr get-login-password` も同様。**`machineid` 側で対応済み**(2026-08-06): compose / CI の環境変数を **`S3_ACCESS_KEY_ID` / `S3_SECRET_ACCESS_KEY`** に改名し、`config.ts` の `S3_CREDENTIALS` 経由で `S3Client` に明示的に渡す(本番は `undefined` → タスクロール)。**この差分をそのまま `myapp` に持っていける** | 2026-08-06 |
@@ -71,7 +72,7 @@
 
 | 16 | **`deploy/notify_slack.sh` が通知の失敗を握りつぶす。** `curl ... || echo "failed"` は**トランスポート層の失敗でしか発火しない**ため、プレースホルダや失効した webhook に POST しても HTTP 302 / 404 が返るだけで**成功扱いになる**(実測)。しかも「未設定ならスキップ」の分岐があるので、**プレースホルダが入っている状態は未設定より悪い**(スキップの表示すら出ない)。`--fail` を付けるか `%{http_code}` を検査して 2xx 以外を警告する | 2026-08-07 |
 | 17 | **`pnpm build` がテストコードを本番成果物に含める。** `tsconfig.json` の `include` に `test/**/*` と `vitest.config.ts` があり、`rootDir: "."` なので `build/test/` と `build/vitest.config.js` ができる。`Dockerfile.prod-main` は `build/` をまるごと運ぶため**本番イメージにテストが焼き込まれる**。容量だけでなく、`script/test/mailtest.ts` の系統(雛形の履歴で SES 認証情報が直書きされていたファイル)を本番に載せない意味もある。**`tsconfig.build.json` を分けて `include` を `src` + `script` に絞る**(`machineid` 側で対応済み。差分をそのまま持っていける)。あわせて `rootDirs`(複数形)は効いておらず、外しても型検査が通ることを確認した | 2026-08-07 |
-| 18 | **`terraform.example/` に旧案件の実 AWS アカウントの DNS レコード値が残っている。** 2026-08-04 の汎用化はドメイン**名**(`soramed.jp` → `myappdomain.com`)を置換したが、**レコードの値**は置換対象に入っていなかった。残っているのは `common/base/16_route53.ses.tf` の SES DKIM トークン 3 件、`common/base/16_route53.search-console.tf` の Google Search Console 検証トークンと `7vod2qiq2b5z.…` サブドメイン、`common/base/16_route53.subdomains.tf` の委任サブゾーンの NS レコード 8 件、`{dev,prod}/util/01_variables.tf` の ACM 検証 CNAME ホスト名。**秘密ではない**(DNS で公開されており誰でも `dig` で引ける)が、雛形としては無意味かつ適用すると誤り。**検出は案件名の grep では不可能**で、ドメイン形式の総なめで初めて出た(`machineid` 側は `terraform.example/` ごと削除するため対応不要) | 2026-08-07 |
+| 18 | **`terraform.example/` に旧案件の実 AWS アカウントの DNS レコード値が残っている。** 2026-08-04 の汎用化はドメイン**名**を `myappdomain.com` に置換したが、**レコードの値**は置換対象に入っていなかった。残っているのは `common/base/16_route53.ses.tf` の SES DKIM トークン 3 件、`common/base/16_route53.search-console.tf` の Google Search Console 検証トークンと検証用サブドメイン、`common/base/16_route53.subdomains.tf` の委任サブゾーンの NS レコード 8 件、`{dev,prod}/util/01_variables.tf` の ACM 検証 CNAME ホスト名。**秘密ではない**(DNS で公開されており誰でも `dig` で引ける)が、雛形としては無意味かつ適用すると誤り。**検出は案件名の grep では不可能**で、ドメイン形式の総なめで初めて出た(`machineid` 側は `terraform.example/` ごと削除するため対応不要) | 2026-08-07 |
 
 ### 派生手順そのものへの追記(`myapp` の計画側に反映)
 

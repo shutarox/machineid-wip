@@ -1,7 +1,7 @@
 # ADR: サーバは service / repository 層を作らず「route → tx を受け取るモデル関数 → 純粋関数」の 3 層にする
 
 - 状態: **採用**(2026-07-10、Phase 1)
-- 関連: `docs/template-repo-workplan.md` の 1-9 / 4-1
+- 関連: `backend/eslint-rules/`(`local/no-unused-tx-param` がこの層構造を強制する)
 
 ## 背景
 

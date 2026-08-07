@@ -1,7 +1,7 @@
 # ADR: 本番 1 環境の最小構成とし、常駐ユーティリティサーバ・NAT Gateway・Aurora を置かない
 
 - 状態: **採用**(2026-08-06)
-- 関連: `terraform.example/README.md`、`docs/decisions/20260806-deploy-and-scheduled-jobs.md`、`docs/plans/20260806-aws-prod-setup.md`
+- 関連: `terraform/README.md`、`docs/decisions/20260806-deploy-and-scheduled-jobs.md`、`docs/plans/20260806-aws-prod-setup.md`
 
 ## 改定履歴
 
@@ -13,14 +13,14 @@
 
 ## 背景
 
-雛形の `terraform.example/` は元プロダクトの構成を汎用化したもので、**dev / prod の 2 環境 × (main / util) の 4 スタック**を持つ。このうち `util` は「各種スクリプトを実行するためのユーティリティサーバ」として常駐しており、実体は次のものだった。
+出発点にした構成(元プロダクトを汎用化したもの)は、**dev / prod の 2 環境 × (main / util) の 4 スタック**を持っていた。**この構成のファイル群はこの ADR の決定に伴って削除済み**なので、以下は当時の実体の記録。
 
 - `Dockerfile.dev-util` が `openssh-server` を入れ、`etc/onstart-dev-util.sh` の最後が `exec /usr/sbin/sshd -D`
 - **公開 NLB**(`util/36_nlb.tf`)のポート 1022 → コンテナの 22 に転送
 - 同時に `pm2` で `pnpm dev` を回し、ALB 経由で SPA(443)と API(8443)も配信 = **dev には同じアプリのデプロイが 2 つある**(ビルド版の `main-app` とソース版の `util-app`)
-- **イメージに SSH 鍵を焼き込む前提の作り**になっている(`Dockerfile.dev-util` に `chmod 700 /app/.ssh && chmod 600 /app/.ssh/*` があり、`docker/home-appuser-dev/` を `/app/` へ COPY する)。**ただし HEAD に鍵そのものは無い**(このディレクトリにあるのは `.bashrc` と `.bash_profile` だけで、`chmod` は `|| true` で失われた鍵の不在を許容している)。問題は鍵が漏れていることではなく、**鍵をイメージに同梱する設計になっていること**
+- **イメージに SSH 鍵を焼き込む前提の作り**になっていた(`chmod 700 /app/.ssh && chmod 600 /app/.ssh/*` があり、`docker/home-appuser-dev/` を `/app/` へ COPY する)。**ただし鍵そのものは無かった**(このディレクトリにあるのは `.bashrc` と `.bash_profile` だけで、`chmod` は `|| true` で失われた鍵の不在を許容していた)。問題は鍵が漏れていたことではなく、**鍵をイメージに同梱する設計になっていること**
 
-一方、**定期バッチはすでに util ではなく main 側で動いている**(`main-app/39_ecs-scheduled-task.tf` が main のタスク定義に `containerOverrides.command` を渡して EventBridge から `run-task` する)。つまり util が担っていたのは「SSH で入って手作業する」ことと「dev 環境そのもの」の 2 つだけだった。
+一方、**定期バッチはすでに util ではなく main 側で動いていた**(EventBridge が main のタスク定義に `containerOverrides.command` を渡して `run-task` する)。つまり util が担っていたのは「SSH で入って手作業する」ことと「dev 環境そのもの」の 2 つだけだった。
 
 今回の案件は**コストを最小化したい**という要件がある。この構成をそのまま起こすと、dev 側だけで月 $120 前後(util の Fargate 常駐 $85 + NLB $18 + ALB $18)が乗る。
 

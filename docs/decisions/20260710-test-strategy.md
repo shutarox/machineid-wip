@@ -1,7 +1,7 @@
 # ADR: DB はモックせず、実 PostgreSQL の統合テストを主軸にする
 
 - 状態: **採用**(2026-07-10、Phase 2)
-- 関連: `docs/template-repo-workplan.md` の Phase 2
+- 関連: `docs/agent-traps.md`(この方針で自走できるかを確かめた受け入れテストの記録)
 
 ## 背景
 

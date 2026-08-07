@@ -1,7 +1,7 @@
 # ADR: API クライアントは TanStack Query を「取得状態管理」としてのみ使い、キャッシュ配信をしない
 
 - 状態: **採用**(2026-08-03、3d)
-- 関連: `docs/template-repo-workplan.md` の 3d、`docs/plans/20260803-tanstack-query-plan.md`
+- 関連: `docs/plans/20260803-tanstack-query-plan.md`
 
 ## 背景
 

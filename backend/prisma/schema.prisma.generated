@@ -169,7 +169,7 @@ model DebugParameter {
 }
 
 // 報告書とその添付画像。
-// ファイルアップロードの参照実装(ADR / 計画は docs/plans/20260805-s3-image-upload.md)。
+// ファイルアップロードの参照実装(ADR / 計画は docs/decisions/20260805-file-upload.md)。
 
 model Report {
   id        String   @id @default(uuid(7)) @db.Uuid
@@ -208,7 +208,7 @@ model UploadedImage {
   report   Report? @relation(fields: [reportId], references: [id], onDelete: Restrict, onUpdate: Restrict)
 
   // S3 のキー。パスにテナントを含めない(アップロード時点で tenantId が
-  // 確定しないユーザがありうるため)。判断は docs/plans/20260805-s3-image-upload.md
+  // 確定しないユーザがありうるため)。判断は docs/decisions/20260805-file-upload.md
   //
   // 値は id から決まるので導出もできるが、あえてカラムに持つ。**外部システムに
   // 対して実際に行った副作用の記録**であり、導出関数を変えても S3 上の実体は

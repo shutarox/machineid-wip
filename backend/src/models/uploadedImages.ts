@@ -26,7 +26,7 @@ const OUTPUT_MIME = 'image/webp';
 
 //================= 純粋関数
 
-/** S3 のキー。テナントを含めない(判断は docs/plans/20260805-s3-image-upload.md) */
+/** S3 のキー。テナントを含めない(判断は docs/decisions/20260805-file-upload.md) */
 export const buildStorageKeys = (uploadedImageId: string) => ({
   storageKey: `uploaded-images/${uploadedImageId}/original.webp`,
   thumbnailKey: `uploaded-images/${uploadedImageId}/thumb.webp`,

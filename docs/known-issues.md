@@ -178,7 +178,7 @@ $ curl -s -o /dev/null -w "%{http_code}" -X POST ... "https://hooks.slack.com/se
 
 **さらに対応するときの方針**: (1) 開発コンテナのメモリ割り当てを増やす(リポジトリ外)、(2) `pnpm verify` の前に `pnpm stop` する運用 — **ただし実測ではピークが 403MB しか下がらない**ので費用対効果は低い、(3) `maxWorkers` をさらに下げる(3 以下は実時間が伸び始める)。
 
-> (2) の但し書きにあった「Playwright がバックエンドを自前起動する分 verify が延びる」は解消済み。**E2E は presigned URL のホスト名が dev と異なるため、常に専用ポート 8082 で自前起動する**ようになった(PR #44、経緯は `docs/plans/20260805-s3-image-upload.md`)ので、dev を止めても追加コストは発生しない。
+> (2) の但し書きにあった「Playwright がバックエンドを自前起動する分 verify が延びる」は解消済み。**E2E は presigned URL のホスト名が dev と異なるため、常に専用ポート 8082 で自前起動する**ようになった(PR #44、経緯は `docs/decisions/20260805-file-upload.md`)ので、dev を止めても追加コストは発生しない。
 
 ## ドキュメント
 
@@ -209,4 +209,3 @@ $ curl -s -o /dev/null -w "%{http_code}" -X POST ... "https://hooks.slack.com/se
 | 内容 | 場所 |
 |---|---|
 | knip が検出した未使用ファイル・依存の仕分け(未判断分) | `docs/plans/20260804-knip-baseline.md` |
-| `terraform.example/` のドメイン・バケット名がプレースホルダ(`myappdomain.com`)で、そのままでは成立しないこと | `terraform.example/README.md` の「案件で差し替えるもの」 |

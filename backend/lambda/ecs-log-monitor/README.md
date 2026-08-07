@@ -28,7 +28,7 @@ ECSから出力されたログで `"type":"error"` のログを監視し、Slack
 2. Terraformでデプロイ:
 
 ```bash
-cd /app/terraform.example/environments/prod/main
+cd ~/app/terraform/environments/prod/main   # 注: この Lambda は現在どの terraform からも参照されていない
 terraform plan -var="slack_webhook_url=YOUR_SLACK_WEBHOOK_URL"
 terraform apply -var="slack_webhook_url=YOUR_SLACK_WEBHOOK_URL"
 ```

@@ -43,7 +43,7 @@
 ## 現状(2026-08-04 時点)と残っている宿題
 
 - `nosniff` → **アプリ層で対応済み**(`app.ts` の `onSend`)
-- **HSTS は未設定**。ALB は 80 → 443 リダイレクトのみで、`terraform.example/environments/` の dev / prod いずれにも応答ヘッダの設定がない → `docs/known-issues.md` に記録
+- **HSTS は未設定**。ALB は 80 → 443 リダイレクトのみで、`terraform/environments/` にも応答ヘッダの設定がない → `docs/known-issues.md` に記録
 
 実害が限定的なのは、セッションクッキーが `secure: true` + `httpOnly` + `sameSite: 'strict'` + `signed` で守られているため(`backend/src/config.ts`)。
 

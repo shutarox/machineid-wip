@@ -131,7 +131,7 @@ frontend/src/pages/UsersAdmin.tsx                          画面($api.useQuery 
 | **API を足す** | `backend/src/routes/api/` にファイルを追加 → 対応するテストを `test/integration/routes/` の同じ階層に置く → `pnpm gen:openapi` でフロントに型を渡す |
 | **UI コンポーネントを足す** | `pnpm dlx shadcn@latest add <name>`(`frontend/` で実行)。生成物は編集してよい |
 | **クライアント強制リロードの基準** | `backend/src/config.ts` の `MINIMUM_CLIENT_VERSION` |
-| **インフラ定義** | `terraform.example/` — **そのまま apply するものではなく構成の参考例**(CI もデプロイも参照していない)。差し替える値の一覧は `terraform.example/README.md` |
+| **インフラ定義** | `terraform/` — 本番 1 環境の実構成。ゼロからの構築手順は `terraform/README.md` |
 
 ## 守るべき規約(機械的に強制されているもの)
 
@@ -159,4 +159,4 @@ lint では検出できないもの(フォームの購読 API の使い方など
 | `docs/plans/` | 個別フェーズの実装計画 |
 | `docs/known-issues.md` | 把握しているが未対応の論点 |
 | `docs/dev-container.md` | 開発コンテナの構成と運用 |
-| `docs/template-repo-workplan.md` | この雛形を作った経緯(雛形化作業の記録) |
+| `docs/agent-traps.md` | 受け入れテストでエージェントが実際に詰まった箇所と、その対処 |
