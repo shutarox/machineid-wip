@@ -16,13 +16,44 @@
 
 set -euo pipefail
 
-if [ $# -lt 1 ]; then
-  echo "Usage: $0 '<command>'"
-  echo "  例: $0 'node /app/backend/build/script/cleanup_uploads.js'"
+usage() {
+  cat <<'EOF'
+本番で任意のコマンドを使い捨ての ECS タスクとして実行する。
+
+使い方:
+  ./deploy/run_task.sh '<コマンド>'
+  ./deploy/run_task.sh --task-definition <family:revision> '<コマンド>'
+  ./deploy/run_task.sh --help
+
+例:
+  ./deploy/run_task.sh 'node /app/backend/build/script/cleanup_uploads.js --dry-run'
+  ./deploy/run_task.sh --task-definition machineid-prod-task:9 \
+      'node /app/backend/build/script/db_bootstrap.js'
+
+--task-definition を省くと**いまサービスが動かしているタスク定義**を使う。
+実行されるコードがデプロイ済みのものと必ず一致するので、通常はこれでよい。
+
+**まだデプロイしていないイメージのスクリプトを動かすときだけ明示する。**
+DB のブートストラップのように「デプロイ前に流す必要があるもの」が該当する
+(サービスは古いリビジョンを指したままなので、省略すると新しいスクリプトが見つからない)。
+EOF
+}
+
+task_def_override=""
+command_line=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --help|-h)         usage; exit 0 ;;
+    --task-definition) task_def_override="$2"; shift 2 ;;
+    *)                 command_line="$1"; shift ;;
+  esac
+done
+
+if [ -z "${command_line}" ]; then
+  usage
   exit 1
 fi
-
-command_line="$1"
 
 export AWS_PROFILE="machineid-prod"
 
@@ -42,7 +73,11 @@ echo "### resolve running task definition"
 svc_json=$(aws ecs describe-services --cluster "${ecs_cluster}" --services "${ecs_service}" \
   --query 'services[0].{td:taskDefinition,net:networkConfiguration.awsvpcConfiguration}' --output json)
 
-task_def_arn=$(echo "${svc_json}" | jq -r '.td')
+if [ -n "${task_def_override}" ]; then
+  task_def_arn="${task_def_override}"
+else
+  task_def_arn=$(echo "${svc_json}" | jq -r '.td')
+fi
 subnets=$(echo "${svc_json}" | jq -r '.net.subnets | join(",")')
 security_groups=$(echo "${svc_json}" | jq -r '.net.securityGroups | join(",")')
 assign_public_ip=$(echo "${svc_json}" | jq -r '.net.assignPublicIp')

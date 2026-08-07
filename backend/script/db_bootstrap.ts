@@ -88,6 +88,12 @@ try {
   const quoted = `'${appPassword.replace(/'/g, "''")}'`;
   await admin.query(`CREATE ROLE "${APP_USER}" LOGIN PASSWORD ${quoted}`);
 
+  // **RDS のマスターは真の superuser ではない**(rds_superuser)。
+  // 他ロールが所有するオブジェクトを作るには、そのロールのメンバーである必要がある。
+  // これが無いと `must be able to SET ROLE "appuser"` で失敗する(実測)
+  console.log(`GRANT ${APP_USER} TO ${MASTER_USER} ...`);
+  await admin.query(`GRANT "${APP_USER}" TO "${MASTER_USER}"`);
+
   console.log(`CREATE DATABASE ${dbName} OWNER ${APP_USER} ...`);
   await admin.query(`CREATE DATABASE "${dbName}" OWNER "${APP_USER}"`);
 } finally {

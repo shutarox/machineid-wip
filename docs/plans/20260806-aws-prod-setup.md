@@ -423,10 +423,37 @@ https://machineid.kas.jp/       → 200(/users も 200 = SPA ルーティング�
 - **`-target` を使うと一部の `output` が state に入らない**(`task_network_configuration` が取れず run-task に失敗)。
   サブネットと SG は `base` の output から直接渡した
 
-##### 未検証
+##### デプロイスクリプトと運用スクリプトの検証(2026-08-07)
 
-**`deploy/deploy_prod-main.sh` はまだ一度も通していない**(今回は相当する操作を手で実行)。
-スクリプトは `git clone` するため、**この差分をコミットしてからでないと検証できない**。
+| 対象 | 結果 |
+|---|---|
+| `deploy_prod-main.sh` | **4 回完走**(フル 1 / `--skip-frontend` 3)。clone → build → push → terraform → migrate → update-service → S3 + invalidation |
+| `run_task.sh` | `cleanup_uploads --dry-run` / `db_bootstrap` / `migrate deploy` / `seed` を本番で実行 |
+| `rollback.sh` | 6→5、5→6、7→5 を実測 |
+| `show_status.sh` | サービス状態 / `GIT_COMMIT` / ターゲット健全性 |
+| `exec.sh` | コマンド生成と `--run` を確認(session-manager-plugin 導入後) |
+
+##### さらに潰した不具合
+
+| 症状 | 原因と対処 |
+|---|---|
+| ロールバック先が存在しない | **terraform が古いリビジョンを deregister していた**。ACTIVE が常に 1 本だけ → `skip_destroy = true` |
+| ロールバックが壊れたリビジョンに着地する | `current - 1` を計算していた。**6 が壊れて 5 に戻し、7 も駄目なとき 6 に行く**。ECS のデプロイ履歴(`sourceServiceRevisions`)から引く実装に変更 |
+| `DB_PASSWORD` が誰にも使われていない | MySQL 時代の `/etc/my.cnf` 転記の名残。**転記処理だけが失われ注入だけ残っていた**。`~/.pgpass` の生成に作り替え |
+| `CREATE DATABASE ... OWNER appuser` が失敗 | **RDS のマスターは真の superuser ではない**。`GRANT appuser TO postgres` が要る |
+| デプロイ前の新スクリプトが `run_task.sh` で動かない | サービスは古いリビジョンを指している。`--task-definition` を追加 |
+
+##### アプリ用ロールへの切り替え(2026-08-07)
+
+**マスター(`postgres`)ではなくアプリ用ロール(`appuser`)で接続する形に変更した。**
+既存 DB の移管ではなく **DROP → CREATE** で作り直している(手順の再現性を優先)。
+
+- SSM を 2 本に分離: `DB_MASTER_PASSWORD`(postgres・terraform と管理操作)/ `DB_PASSWORD`(appuser・アプリと `.pgpass`)
+- `backend/script/db_bootstrap.ts` を追加(削除した MySQL 用 `createuser.sql` の置き換え)
+- `.pgpass` は `appuser` のものを生成する
+
+**通しの構築手順は `terraform/README.md` の「まっさらな AWS アカウントからの構築手順」に書いた。**
+順序を間違えたときに何が起きるかも表にしてある。
 
 ### 2. ネットワーク(`prod/base`)
 
