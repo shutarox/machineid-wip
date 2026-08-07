@@ -181,23 +181,51 @@ compose の `name:` / `image:` / 公開ポートを変更する(上表)。コン
 
 ### 3. 削ぎ落とし
 
+**docs は「参照数」と「旧案件の固有名詞の数」で判断した**(2026-08-07 実測)。
+ADR は**全 11 本とも固有名詞ゼロ**だったのでそのまま残す。汚染されているのは `plans` 側。
+
+#### `docs/decisions/`(ADR)
+
 | 対象 | 扱い |
 |---|---|
-| `docs/decisions/` | **全 9 本を残す**(`- 関連:` の張り替えのみ) |
-| `docs/plans/20260805-s3-image-upload.md` | **ADR に格上げして移す** |
-| `docs/plans/` の残り 8 本 | 削除 |
-| `docs/template-repo-workplan.md` | 削除 |
+| ADR 全 11 本 | **残す。** 旧案件名・machineid の実値とも **0 件**(実測)。書き方が `db-pg.<local_domain_name>` のようにプレースホルダになっており、実値は `plans` 側に寄っている |
+| ADR の `- 関連:` 行 | **消す側を指す参照の張り替えが必須。** 下の「削除」に該当するファイルを指している箇所を潰す(手順 4 のリンク切れ検出で拾う) |
+
+**ADR を残す理由**は、あれが**逆行防止装置**だから(「なぜ service 層を作らないか」「なぜ NAT を置かないか」)。
+**「有用な調査結果を別ドキュメントに再構築」すると、再構築の過程で『却下した選択肢』が落ちる。**
+あれが ADR の本体なので、ファイルごと残す。
+
+#### `docs/plans/` と `docs/template-repo-workplan.md`
+
+| 対象 | 参照 | 旧案件名 | 扱い |
+|---|---|---|---|
+| **`template-repo-workplan.md`** | **9** | 5 | **「受け入れテスト実施記録」の節だけ切り出して残す。**(→ `docs/agent-traps.md` 等)。**CLAUDE.md の「最初に見るところ」が指している唯一の docs** で、中身は「エージェントが実際に詰まった箇所と、どう塞いだか」。**旧案件名はこの節には含まれない**ので置換も不要。残りの雛形化の作業経緯は削除 |
+| `20260805-s3-image-upload.md` | 6 | 1 | **ADR に格上げして移す**(`schema.prisma` のカラムコメントと `libs/storage.ts` が参照している) |
+| `20260806-aws-prod-setup.md` | 6 | 0(machineid の実値 30) | **残す。** 自分の案件の実施記録なので実値が入っていてよい。**通しの手順は `terraform/README.md` に移してある**ので、残る価値は「経緯と踏んだ罠」と「フェーズ 0 の Identity Center 手順」 |
+| `20260803-tanstack-query-plan.md` | 2 | **0** | **そのまま残せる** |
+| `20260804-knip-baseline.md` | 1 | **0** | **そのまま残せる**(「消すと決めたのに残る」の教訓) |
+| `20260804-eslint-rules-plan.md` | 0 | **0** | **そのまま残せる**(カスタム lint ルールの why) |
+| `20260803-ui-shadcn-plan.md` | 1 | 4 | 置換すれば残せるが、**ADR `20260803-ui-stack.md` と内容が重複**。削除でよい |
+| `20260804-claude-md-restructure.md` | 1 | 1 | 同上(ADR `20260804-agent-docs-structure.md` と重複)。削除でよい |
+| `20260804-ssm-namespace.md` | 0 | 7 | **削除。** 内容は `backend/src/config.ts` と `README.md` にある |
+| `20260804-terraform-example.md` | 0 | 14 | **削除。** 対象の `terraform.example/` ごと消える |
+| `20260805-derive-project-skill.md` | 0 | 6 | **削除。** 冒頭に「実行しないこと」と書かれた中止済みの計画 |
+| **この計画ファイル自身** | 2 | 7 + machineid 5 | **削除**(まっさら化の作業記録なので案件リポジトリに持ち込まない) |
+
+**旧案件名が 0 件のものが 3 本ある**(tanstack-query / knip-baseline / eslint-rules)。手を入れずに残せる。
+
+#### その他
+
+| 対象 | 扱い |
+|---|---|
+| `docs/template-feedback.md` | **残す。** 還元は 1 回で終わらず、まっさら化後も貯め続ける |
 | `docs/known-issues.md` | 案件に効く項目だけ残して書き直す |
 | `docs/dev-container.md` | 残す(構成が同じため) |
-| `terraform.example/` | **案件用の実 terraform を新規作成**(`docs/plans/20260806-aws-prod-setup.md`)。example は削除 |
-| `deploy/*.sh` | AWS プロファイル名・ECR 名・clone 先を案件のものに |
-| 報告書 CRUD(`reports` / `uploadedImages`) | **案件に不要なら削除**。判断は案件次第 |
-| `CLAUDE.md` の「プロジェクト概要」 | **雛形の説明から案件の説明に書き換える**。「雛形リポジトリ」「案件で使うときは」という視点が残っていないか通しで確認する |
+| `terraform.example/` | **削除。** 案件用の実 terraform は `terraform/` に作成済み |
+| `deploy/*.sh` | 実値は差し替え済み。clone 先だけ `machineid-wip` → `machineid` に直す |
+| 報告書 CRUD(`reports` / `uploadedImages`) | **残す**(2026-08-07 判断。B を見送ったため) |
+| `CLAUDE.md` の「プロジェクト概要」 | **雛形の説明から案件の説明に書き換える**。「雛形リポジトリ」「案件で使うときは」という視点が残っていないか通しで確認する。**`docs/template-repo-workplan.md` を指す行は、切り出した先へ張り替える** |
 | `README.md` | 同上。雛形の使い方ではなく案件のセットアップ手順にする |
-| `docs/decisions/2026080*-aws-*.md` | **残す**(案件の構成判断そのもの) |
-| `docs/plans/20260806-aws-prod-setup.md` | 実施記録を書き切ってから、残すか ADR へ吸収するか判断する |
-| この計画ファイル自身 | **削除**(まっさら化の作業記録なので、案件リポジトリには持ち込まない) |
-| `docs/template-feedback.md` | **残す。** 還元は 1 回で終わらず、まっさら化後も貯め続ける |
 
 ### 4. 痕跡の検査(案件名を列挙しない)
 
