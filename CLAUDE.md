@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 そのため、**docs には雛形(`myapp`)としての記述がまだ残っている**。「この雛形は」「案件で使うときは」という視点の文章を見つけたら、それは**書き換え対象の残骸**であって現行の方針ではない。特に `docs/template-repo-workplan.md` と `docs/plans/` の大半は雛形を作った経緯の記録で、まっさら化のときに削除する。
 
-**雛形側の不備を見つけたら `docs/plans/20260806-derive-first-project.md` の「myapp に還元する項目」に追記すること。** 派生側の git 履歴は捨てるので、書き残さないと `myapp` に戻せない。
+**雛形側の不備を見つけたら `docs/template-feedback.md` に追記すること。** 派生側の git 履歴は捨てるので、書き残さないと `myapp` に戻せない。**この台帳はまっさら化後も残す**(還元は 1 回で終わらないため)。
 
 DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コンテナは `TZ=Asia/Tokyo` で動作する。パッケージマネージャーは **pnpm**(`only-allow pnpm` で強制)。ルートは pnpm workspace(`backend` + `frontend`)で、`pnpm check` / `lint` / `test` / `dev` / `stop` はルートから両パッケージに対して実行できる。
 
@@ -35,6 +35,7 @@ DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コン�
 | なぜこの構成なのか知る | `docs/decisions/`(索引は `docs/decisions/README.md`) |
 | 環境を立ち上げる | `README.md` / `docs/dev-container.md` |
 | 未対応と分かっている問題を知る | `docs/known-issues.md` |
+| **雛形(`myapp`)の不備を見つけた** | `docs/template-feedback.md` に追記(**まっさら化後も残す台帳**) |
 | **過去にエージェントが踏んだ罠を知る** | `docs/template-repo-workplan.md` の**受け入れテスト実施記録**(前任者が詰まった箇所の一覧) |
 | まっさら化までの段取り・現在地を知る | `docs/plans/20260806-derive-first-project.md` |
 | AWS 本番環境を作る | `docs/plans/20260806-aws-prod-setup.md`(決定は `docs/decisions/20260806-aws-*.md`) |

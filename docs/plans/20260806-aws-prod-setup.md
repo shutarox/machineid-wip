@@ -20,7 +20,7 @@
 **この AWS 構築は、まっさら化の手前で完了させる作業のひとつ**(他はアプリの要件そぎ落とし・ドキュメントの案件化・痕跡検査)。したがって:
 
 - ここで作る `terraform/` は**まっさら化後の初期コミットに含まれる**。`terraform.example/` は逆に削除される
-- 作業中に見つけた**雛形側の不備**は、`20260806-derive-first-project.md` の「myapp に還元する項目」に追記する(この計画ファイル自体はまっさら化のときに残すか判断する)
+- 作業中に見つけた**雛形側の不備**は `docs/template-feedback.md` に追記する(**あの台帳はまっさら化後も残す**)
 - AWS 側のリソースはリポジトリのまっさら化と無関係に残る。**tfstate はリポジトリではなく S3 にある**ので、履歴を捨てても state は失われない
 
 ## 確定した判断(ユーザー選択)
@@ -525,7 +525,7 @@ onstart は `onstart-local.sh` と `onstart-prod-main.sh` の 2 本。
   - `aws ecs update-service --task-definition <arn>` → `aws ecs wait services-stable`
 - **`run_task.sh` を新規追加**(任意コマンドの `run-task` 実行 + `exitCode` 判定 + CloudWatch Logs の tail)
 - **`AWS_PROFILE` を SSO プロファイル名に変更する。** `aws ecr get-login-password --profile <sso>` も `aws ecs run-task` も SSO プロファイルで通る。セッション切れのときは `aws sso login` を促して終了する(静的キーへ退避しない)
-- **`aws_account_id` / `cloudfront_distribution_id` の直書きを案件の値に差し替える**(現在は旧案件の実値が残っている。`20260806-derive-first-project.md` の還元項目 3)
+- **`aws_account_id` / `cloudfront_distribution_id` の直書きを案件の値に差し替える**(現在は旧案件の実値が残っている。`docs/template-feedback.md` の項目 3)
 - `deploy_dev-*` / `start_*` / `stop_*` は**削除**
 - `rollback.sh` を追加(`update-service --task-definition <前のリビジョン>` のみ)
 
