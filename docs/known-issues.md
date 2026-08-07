@@ -8,25 +8,6 @@
 
 ---
 
-## セキュリティヘッダ / セッションクッキー
-
-> ヘッダをどの層で付けるかは `docs/decisions/20260804-security-headers.md` で決定済み(`nosniff` はアプリ層で対応済み)。ここに残るのは**インフラ側で未設定**という宿題。
-
-### HSTS が設定されていない
-
-- 記録日: 2026-08-04
-- 対象: インフラ(CloudFront / ALB)
-
-**症状**: ALB は 80 → 443 リダイレクトのみで、`Strict-Transport-Security` を付けていない。`terraform.example/environments/dev/` の CloudFront(`32_cloudfront.tf`)・ALB(`36_alb.tf`)いずれにも応答ヘッダの設定がない。
-
-**影響**: リダイレクトだけでは**初回の HTTP リクエストが平文で発生**するため、経路上の攻撃者による SSL ストリッピングの窓が残る。ただしセッションクッキーが `secure: true` + `sameSite: 'strict'` のため、**その窓でセッションを奪われる経路は塞がっている**。残るのは初回リクエストの URL / ヘッダが平文で観測される程度。
-
-**見送り理由**: 実害が小さく、アプリ層の問題ではないため。`@fastify/helmet` で API 側に HSTS を付けても、守られるのは「ブラウザが API ホストへ直接 HTTP アクセスする」経路だけで、実際の呼び出し(SPA からの絶対 HTTPS URL への `fetch`)には効かない。
-
-**対応するときの方針**: **CloudFront の response headers policy** で付ける(ユーザーが URL を打ち込む SPA 側が本命)。ALB なら `routing.http.response.strict_transport_security.header_value`。アプリ層(helmet)には戻さない。
-
----
-
 ## インフラ(本番構成)
 
 > 構成そのものの決定は `docs/decisions/20260806-aws-minimal-prod.md`。ここに残るのは、その構成を選んだ結果として**受け入れたまま先送りしたリスク**。
@@ -89,48 +70,6 @@
 **見送り理由**: 塞ぐには CloudFront 経由の配信(署名付き URL / Cookie)へ移す必要があり、`libs/storage.ts` と表示側の変更を伴う。報告書の画像は**ロールで見える範囲が変わる**ため、アクセス制御の移植が小さくない。PoC 期に払うコストとして見合わない。
 
 **対応するときの方針**: **CloudFront + OAC で画像専用のディストリビューションを立て、署名付き URL / Cookie に移す。** SPA 用の CloudFront はどのみち作るので追加は 1 つ。露出対策としてだけでなく、**キャッシュが効いて S3 のリクエスト課金とレイテンシが下がり、自社ドメインで配信できる**ので、配信アーキテクチャとしても上位互換。あわせて**画像バケット名にアカウント ID を入れない**(現行の命名を維持すること。tfstate バケットは URL に出ないので入れてよい)。
-
-### RDS エンドポイントの指定方法を決めきれていない(CNAME か実エンドポイントか)
-
-- 記録日: 2026-08-07
-- 対象: SSM `/machineid-keys/DB_URL` / `terraform/environments/prod/base/11_network.tf`
-- 関連: `docs/decisions/20260806-aws-minimal-prod.md` の改定履歴(2026-08-07)
-
-**症状**: どちらの案も実機で動作を確認済みだが、**トレードオフの評価が確定していない**。
-
-| | 接続先 | `sslmode` | 性質 |
-|---|---|---|---|
-| **A** | `db-pg.prod.internal`(CNAME) | `no-verify` | 暗号化のみ。**Prisma 6 の実質的な挙動と同じ**(Rust エンジンは `prefer` 相当で SSL を張るが検証しない)。ADR 初版の「エンドポイントを直書きしない」設計を維持できる |
-| **B**(現状) | RDS の実エンドポイント | `verify-full` | CA + ホスト名を検証。**証明書の SAN が実エンドポイントのみ**なので CNAME 経由では成立しない |
-
-**影響**: A はサーバ証明書を検証しないため、VPC 内で DNS/経路を奪われた場合に気づけない。B は DB インスタンスを差し替えるとき SSM の `DB_URL` 更新 + タスク入れ替えが要る(CNAME なら Route53 の変更だけで済む…はずだが、**接続プールを張りっぱなしなので結局タスク再起動が要る**)。
-
-**見送り理由**: 実害の差が小さく、初期構築の勢いで決めきるより、運用してから判断したい。**現状は B で動作している**(2026-08-07 の本番構築で確認)。
-
-**対応するときの方針**: A に戻すなら SSM の `DB_URL` を `db-pg.prod.internal` + `sslmode=no-verify` に書き換えてタスクを入れ替えるだけ(**terraform の変更は不要**)。あわせて ADR の改定履歴に追記すること。判断材料になるのは「VPC 内の DNS を信頼できるか」と「DB 差し替えの頻度」。
-
-### `backend/script/*` の呼び出し方がローカルと本番で非対称
-
-- 記録日: 2026-08-07
-- 対象: `backend/package.json` の `script` / `deploy/run_task.sh`
-
-**症状**: ローカルは `pnpm script script/xxx.ts`、本番は `node /app/backend/build/script/xxx.js` と呼び方が違う。本番イメージには `pnpm` もソース `.ts` も無い(意図的)ため、`pnpm script` は使えない。
-
-**影響**: 実行そのものは問題ない(本番で `cleanup_uploads --dry-run` の完走を確認済み)。困るのは**手順を覚え直す必要があること**と、ローカルで書いた実行例をそのまま本番に持っていけないこと。
-
-**見送り理由**: 実害が薄く、`run_task.sh` のコメントに使用例を書いてある。**未検証の変更を増やしたくない**段階だった(`deploy_prod-main.sh` 自体がまだ通っていない)。
-
-**対応するときの方針**: イメージに薄いラッパーを 1 本置くのが最も安い。
-
-```bash
-# /app/backend/run
-#!/bin/bash
-exec node "/app/backend/build/script/$1.js" "${@:2}"
-```
-
-→ `./deploy/run_task.sh 'bash /app/backend/run cleanup_uploads --dry-run'`
-
-**`pnpm` を最終ステージに入れて `pnpm script` を再現するのは避ける** — イメージが重くなるうえ、`script` の定義が tsx(TS 実行)前提なので「本番に TS を持ち込まない」前提と衝突する。
 
 ### `/api/ping` がテナント 0 件で 500 を返し、シード前の環境が起動できない
 

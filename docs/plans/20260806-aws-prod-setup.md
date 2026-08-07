@@ -380,7 +380,7 @@ Arn: arn:aws:sts::439996178164:assumed-role/AWSReservedSSO_AdministratorAccess_.
 
 ##### SSM パラメータ(`/machineid-keys/`)
 
-`DB_PASSWORD` / `DB_URL` / `COOKIE_SECRET` / `CRYPTO_SECRET` / `SES_SMTP_USER` / `SES_SMTP_PASS` /
+`DB_MASTER_PASSWORD` / `DB_PASSWORD` / `COOKIE_SECRET` / `CRYPTO_SECRET` / `SES_SMTP_USER` / `SES_SMTP_PASS` /
 `MASTER_SECRET` / `MASTER_IP_WHITELIST` を **SecureString** で登録済み。
 
 - `DB_PASSWORD` は生成から保存まで表示せず、terraform へは SSM から読んで `TF_VAR_` で渡した
@@ -412,7 +412,7 @@ https://machineid.kas.jp/       → 200(/users も 200 = SPA ルーティング�
 | `no pg_hba.conf entry ... no encryption` | **RDS は SSL 必須**(`rds.force_ssl` 既定 1)。`DB_URL` に `sslmode` を追加 |
 | `self-signed certificate in certificate chain` | RDS CA バンドルをイメージに同梱し `NODE_EXTRA_CA_CERTS` を設定 |
 | CA を入れても効かない | **`su - appuser` が環境変数を捨てる**。`APPX_` 接頭辞でタスク定義に渡す必要があった |
-| ホスト名検証が通らない | 証明書の SAN は RDS 実エンドポイントのみ。`DB_URL` を実エンドポイント + `verify-full` に(ADR 改定履歴 2026-08-07) |
+| ホスト名検証が通らない | 証明書の SAN は RDS 実エンドポイントのみ。**最終的に CNAME + `sslmode=no-verify` に決着**し、`DB_URL` は SSM に置かず entrypoint が組み立てる形にした(ADR 改定履歴 2026-08-07 の 2 行) |
 | サービスが古いイメージのまま | **`ignore_changes = [task_definition]` の想定どおりの挙動**。`update-service --task-definition` で切り替える |
 | ターゲットが永久に unhealthy | `/api/ping` がテナント 0 件で 500(`docs/known-issues.md`)。シードで解消 |
 

@@ -134,14 +134,19 @@ resource "aws_vpc_endpoint" "s3" {
 
 #================================================= 内部 DNS
 
-# RDS への人間向けの別名。**アプリの接続には使わない。**
+# **アプリの DB 接続先。** タスク定義の APPX_DB_HOST がこれを指し、
+# entrypoint が DB_URL を組み立てる。
 #
-# `DB_URL` は sslmode=verify-full で接続するが、**証明書の SAN は RDS の実エンドポイント
-# だけ**なので、この CNAME 経由ではホスト名検証を通せない(実測。ADR の改定履歴 2026-08-07)。
-# アプリは SSM の DB_URL に書いた実エンドポイントへ繋ぐ。
+# **実エンドポイントを直接使わないのは、障害復旧時の手作業を減らすため。**
+# スナップショット / PITR から復元するとエンドポイントが変わるが、この CNAME なら
+# terraform apply が向け直し、**アプリは接続の張り直しで自力回復する**
+# (実エンドポイント方式だと SSM の書き換えとタスクの強制入れ替えが要る)。
 #
-# それでも残しているのは、ECS Exec で入って `psql -h $DB_HOST` を叩くときに楽なため
-# (psql の既定は sslmode=prefer で検証しない)。
+# 代わりに `sslmode=no-verify` になる。**証明書の SAN は RDS の実エンドポイントだけ**
+# なので、CNAME 経由ではホスト名検証を通せないため(`verify-ca` でも pg の実装では検証される)。
+# 暗号化はされる。判断の経緯は ADR 20260806-aws-minimal-prod.md の改定履歴 2026-08-07。
+#
+# ECS Exec で入って `psql -h $DB_HOST` を叩くのにも使える(psql の既定は sslmode=prefer)。
 resource "aws_route53_zone" "internal" {
   name = var.local_domain_name
 

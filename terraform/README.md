@@ -76,7 +76,9 @@ aws s3api put-bucket-lifecycle-configuration --bucket "$B" --lifecycle-configura
 
 ### 3. SSM に秘密情報を入れる
 
-**`DB_URL` はまだ作れない**(RDS のエンドポイントが決まっていない)。手順 5 で入れる。
+**接続文字列(`DB_URL`)は SSM に置かない。** 秘密なのはパスワードだけで、ホスト(CNAME)・
+ユーザ・DB 名・接続パラメータは静的なので、entrypoint が組み立てる
+(`etc/onstart-prod-main.sh`。ADR 20260806-aws-minimal-prod.md の改定履歴)。
 
 ```bash
 # パスワードは生成して直接 SSM へ。**画面にも履歴にも残さない**
@@ -84,7 +86,10 @@ put() { aws ssm put-parameter --name "/machineid-keys/$1" --type SecureString --
 gen() { python3 -c "import secrets,string; a=string.ascii_letters+string.digits+'-_.~'; print(''.join(secrets.choice(a) for _ in range(40)))"; }
 
 put DB_MASTER_PASSWORD "$(gen)"   # RDS マスター(postgres)。terraform と管理操作用
-put DB_PASSWORD        "$(gen)"   # アプリ用ロール(appuser)。手順 7 で作る
+put DB_PASSWORD        "$(gen)"   # アプリ用ロール(appuser)。手順 8 のブートストラップが作る
+
+# **パスワードは URL セーフな文字だけで生成すること**(gen がそうしている)。
+# entrypoint が DB_URL に埋め込むため、`@` や `/` が入ると壊れる
 
 # 案件の値を入れる(ダミーではなく実値)
 put COOKIE_SECRET       '...'
@@ -103,7 +108,7 @@ export TF_VAR_db_master_password=$(aws ssm get-parameter \
 (cd base && terraform init && terraform apply)
 ```
 
-### 5. NS 委任(**人手・別アカウント**)と `DB_URL` の登録
+### 5. NS 委任(**人手・別アカウント**)
 
 ```bash
 (cd base && terraform output name_servers)   # 4 本の NS
@@ -113,19 +118,6 @@ dig +short NS machineid.kas.jp               # 返るまで待つ
 
 **委任が済むまで手順 6 に進まないこと。** `aws_acm_certificate_validation` が
 DNS 検証を完了できず、**既定 75 分のタイムアウトまで固まる**。
-
-あわせて `DB_URL` を登録する。**実エンドポイント + `sslmode=verify-full`**
-(CNAME 経由では証明書の SAN と一致せず検証を通せない。`docs/known-issues.md` 参照)。
-
-```bash
-EP=$(aws rds describe-db-instances --db-instance-identifier machineid-prod-pg \
-  --query 'DBInstances[0].Endpoint.Address' --output text)
-PW=$(aws ssm get-parameter --name /machineid-keys/DB_PASSWORD --with-decryption \
-  --query Parameter.Value --output text)
-aws ssm put-parameter --name /machineid-keys/DB_URL --type SecureString --overwrite \
-  --value "postgresql://appuser:${PW}@${EP}:5432/machineid?connection_limit=20&sslmode=verify-full"
-unset PW
-```
 
 ### 6. `main` を apply(ACM / CloudFront / ALB / ECR)
 
