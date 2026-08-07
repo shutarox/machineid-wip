@@ -136,7 +136,7 @@ $ curl -s -o /dev/null -w "%{http_code}" -X POST ... "https://hooks.slack.com/se
 
 1. 実在する Incoming Webhook を作り、**SSM の SecureString**(`/<project>-keys/SLACK_WEBHOOK_URL`)に置く
    — compose に直書きすると雛形の履歴に残る(**過去に実際に webhook URL が履歴へ混入している**。
-   `docs/plans/20260806-derive-first-project.md` の「秘密情報の混入」)
+   `docs/template-feedback.md` の項目 25)
 2. `deploy/*.sh` は実行時に SSM から取得する(`aws ssm get-parameter`)
 3. **`notify_slack.sh` を「HTTP ステータスも見る」ように直す。** いまの実装は
    プレースホルダや失効した webhook を黙って見逃す。`-f`(`--fail`)を付けるか
@@ -199,7 +199,6 @@ $ curl -s -o /dev/null -w "%{http_code}" -X POST ... "https://hooks.slack.com/se
 **なぜ残っているか**: 当初はまっさら化の前に片付ける予定だったが、**雛形を `machineid` から作り直す方針**
 (`docs/template-feedback.md` の「還元の方式」)が決まったため、**まっさら化の後に移した**。
 案件化と雛形起こしは方向が逆の作業で、まっさら化の直前にやると `myapp` を起こすときに巻き戻すことになる。
-判断の詳細は `docs/plans/20260806-derive-first-project.md`(**まっさら化で消える**)。
 
 **影響**: 初期コミットに雛形視点の文章が残る。エージェントが `CLAUDE.md` を読んだとき、
 **このリポジトリを雛形だと解釈しうる**のが実害。

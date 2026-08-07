@@ -35,7 +35,7 @@ done
 export AWS_PROFILE="machineid-prod"
 export NODE_ENV="production"
 
-repo_url="git@github.com:shutarox/machineid-wip.git"
+repo_url="git@github.com:shutarox/machineid.git"
 repo_branch="main"
 
 # 大元のプロジェクトは HOME 直下を使っていたが、この雛形はリポジトリを ~/app に置くので

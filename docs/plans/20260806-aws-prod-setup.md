@@ -15,7 +15,7 @@
 
 ### まっさら化との関係
 
-`machineid` は雛形 `myapp` からの派生で、**初期カスタマイズが終わったら git 履歴を捨てて新リポジトリに移す**(`docs/plans/20260806-derive-first-project.md` の手順 6 = まっさら化)。
+`machineid` は雛形 `myapp` からの派生で、**初期カスタマイズの完了時に git 履歴を捨てて新リポジトリに移した**(= まっさら化。2026-08-07 実施)。以下は**その手前で書かれた記述**なので、「まっさら化の前に」という表現は済んだ話として読むこと。
 
 **この AWS 構築は、まっさら化の手前で完了させる作業のひとつ**(他はアプリの要件そぎ落とし・ドキュメントの案件化・痕跡検査)。したがって:
 
@@ -168,7 +168,7 @@ InvalidClientTokenId: The security token included in the request is invalid.   �
 `aws sts get-caller-identity --profile machineid-prod` が通ること・E2E(実 MinIO 経由の画像アップロード)が
 通ることを確認。暫定で置いていた `.envrc` の `unset` 3 行は削除済み。
 
-- 雛形にも同じ問題があるため還元対象(`20260806-derive-first-project.md` の項目 6)
+- 雛形にも同じ問題があるため還元対象(`docs/template-feedback.md` の項目 6)
 
 #### 0-b. コンソールでの初期設定(人手が必要)
 
