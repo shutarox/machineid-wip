@@ -3,6 +3,13 @@
 - 状態: **採用**(2026-08-06)
 - 関連: `terraform.example/README.md`、`docs/decisions/20260806-deploy-and-scheduled-jobs.md`、`docs/plans/20260806-aws-prod-setup.md`
 
+## 改定履歴
+
+| 日付 | 内容 |
+|---|---|
+| 2026-08-06 | 初版 |
+| 2026-08-07 | **DB 接続の記述を改定**(ただし**この点は再評価の余地を残している**: `docs/known-issues.md`「RDS エンドポイントの指定方法を決めきれていない」)。 当初は「タスク定義に RDS のエンドポイントを直接書かず、プライベートホストゾーンの `db-pg.<local_domain_name>` 経由で参照する」としていたが、**実機で成立しなかった**。`rds.force_ssl` の既定が `1`(Aurora / RDS とも)で SSL が必須である一方、**証明書の SAN は RDS の実エンドポイントだけ**なので、CNAME 経由ではホスト名検証を通せない。`sslmode=verify-ca` でも pg の実装ではホスト名が検証される。**`DB_URL`(SSM)に実エンドポイント + `sslmode=verify-full` を書く**方針に変更した。差し替え時は SSM を更新してタスクを入れ替える |
+
 ## 背景
 
 雛形の `terraform.example/` は元プロダクトの構成を汎用化したもので、**dev / prod の 2 環境 × (main / util) の 4 スタック**を持つ。このうち `util` は「各種スクリプトを実行するためのユーティリティサーバ」として常駐しており、実体は次のものだった。
@@ -143,7 +150,7 @@ RDS は最初から private サブネットにあり**移動しない**ため、
 - **アウトバウンドの送信元 IP はタスクごとに変わる。** 送信元 IP の固定を要求する外部サービス連携が出てきたら、NAT Gateway か NAT インスタンス(または固定 IP を持つプロキシ)の導入を検討し、**この ADR に改定履歴を追記する**。`MASTER_IP_WHITELIST` はインバウンドの話なので影響しない
 - **S3 の Gateway エンドポイントは無料**なので、public サブネット構成でも入れてよい(トラフィックをインターネット経路から外せる)。Interface エンドポイントとは課金体系が違う点に注意
 - **Aurora に戻さないこと。** Prisma のスキーマにも実装にも Aurora 固有機能への依存はない。DB のスペックが足りなくなった場合は、まず `instance_class` を上げる(`db.t4g.small` → `db.t4g.medium`)
-- **RDS のエンドポイントは Route53 のプライベートホストゾーン(`db-pg.<local_domain_name>`)経由で参照する。** アプリの `DB_HOST` を変えずにインスタンスを差し替えられるようにするため、タスク定義に RDS のエンドポイントを直接書かない
+- **`DB_URL` には RDS の実エンドポイントを書き、`sslmode=verify-full` で接続する**(2026-08-07 改定。下記「改定履歴」)。プライベートホストゾーンの `db-pg.<local_domain_name>` は残してあるが、**証明書の SAN が RDS の実エンドポイントなので、CNAME 経由ではホスト名検証が通らない**。DB インスタンスを差し替えるときは SSM の `DB_URL` を更新してタスクを入れ替える
 - **静的アクセスキーを持つ IAM ユーザーを terraform で作らないこと。** `terraform-tf-user-iam` / `terraform-tf-user-main` を「デプロイに必要だから」と復活させない。人間は SSO、CI は OIDC で足りる。**ECS タスクロールなど「リソースが引き受けるロール」は別物なので、こちらは残す**
 - **`iam:CreateAccessKey` / `iam:UpdateLoginProfile` / `iam:PassRole` / `iam:AttachRolePolicy` を `"Resource": "*"` で許可しないこと。** いずれも単独でアカウント乗っ取りに繋がる。雛形のポリシーはこれで権限分離が無効化されていた
 - **GitHub Actions の OIDC を設定するときは、信頼ポリシーの `sub` を必ず固定すること。** OIDC で短命なのはトークン(数分)と STS の資格情報(既定 1 時間)であって、**信頼ポリシー自体は削除するまで無期限に残る**。`aud` だけを検査して `sub` を絞らないと、**GitHub 上の任意のリポジトリからロールを引き受けられる**。最低でも `repo:<org>/<repo>:ref:refs/heads/main`、望ましくは GitHub Environment を使って `repo:<org>/<repo>:environment:production`(承認を挟める)。この場合「main に push できる人 = ロールを引き受けられる人」になるため、**branch protection または Environment の承認とセットで導入する**

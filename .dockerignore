@@ -1,0 +1,33 @@
+# docker のビルドコンテキストから外すもの。
+#
+# 対象は 2 つのビルド:
+#   - dev コンテナ (docker/Dockerfile.local、context はリポジトリルート)
+#   - 本番イメージ (docker/Dockerfile.prod-main、context は deploy スクリプトが作るクローン)
+#
+# どちらも依存はイメージ内で入れ直すので、ホスト側の node_modules を送る意味がない。
+
+.git
+node_modules
+**/node_modules
+
+# ビルド成果物(イメージ内で作り直す)
+build
+**/build
+dist
+**/dist
+
+# デプロイスクリプトの作業ディレクトリ(クローン先)
+/build
+
+# terraform のプロバイダ実体と state
+**/.terraform
+*.tfstate
+*.tfstate.*
+
+# テスト・開発の生成物
+test-results
+playwright-report
+coverage
+pgdump
+.claude
+.vscode

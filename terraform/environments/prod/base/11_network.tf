@@ -134,9 +134,14 @@ resource "aws_vpc_endpoint" "s3" {
 
 #================================================= 内部 DNS
 
-# RDS のエンドポイントをこのゾーンの CNAME で参照する。
-# アプリの DB_HOST を変えずにインスタンスを差し替えられるようにするため、
-# タスク定義に RDS のエンドポイントを直接書かない(ADR の「エージェント向けの注意」)
+# RDS への人間向けの別名。**アプリの接続には使わない。**
+#
+# `DB_URL` は sslmode=verify-full で接続するが、**証明書の SAN は RDS の実エンドポイント
+# だけ**なので、この CNAME 経由ではホスト名検証を通せない(実測。ADR の改定履歴 2026-08-07)。
+# アプリは SSM の DB_URL に書いた実エンドポイントへ繋ぐ。
+#
+# それでも残しているのは、ECS Exec で入って `psql -h $DB_HOST` を叩くときに楽なため
+# (psql の既定は sslmode=prefer で検証しない)。
 resource "aws_route53_zone" "internal" {
   name = var.local_domain_name
 

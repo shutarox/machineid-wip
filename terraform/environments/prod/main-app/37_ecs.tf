@@ -67,6 +67,8 @@ resource "aws_ecs_task_definition" "main" {
       environment = [
         { name = "APPX_NODE_ENV", value = "production" },
         { name = "APPX_SERVER_ENV", value = "production" },
+        # **アプリはこれを読まない**(接続先は SSM の DB_URL)。
+        # ECS Exec で入って `psql -h $DB_HOST` を叩くときの利便のために残している
         { name = "APPX_DB_HOST", value = "db-pg.${var.local_domain_name}" },
         { name = "APPX_ENABLE_DEBUG_MODE", value = "false" },
         { name = "APPX_SPA_APP_BASE_URL", value = "https://${local.url_host_name_spa}" },
@@ -75,6 +77,16 @@ resource "aws_ecs_task_definition" "main" {
 
         # オブジェクトストレージ。本番は S3_ENDPOINT を設定せず SDK の既定に任せる
         { name = "APPX_S3_BUCKET", value = var.s3_bucket_name_uploads },
+
+        # RDS の CA バンドル(イメージに同梱)。**RDS は SSL 接続を要求し**、
+        # @prisma/adapter-pg は Node の信頼ストアで検証するため、これが無いと
+        # `self-signed certificate in certificate chain` で接続できない。
+        #
+        # **`APPX_` 接頭辞が必須。** entrypoint(etc/onstart-prod-main.sh)は
+        # `exec su - appuser` でアプリを起動する = **ログインシェルが環境変数を捨てる**ため、
+        # `APPX_*` を `/etc/environment` へ転記したものだけが子プロセスに届く。
+        # 接頭辞なしで渡した変数は**黙って消える**。
+        { name = "APPX_NODE_EXTRA_CA_CERTS", value = "/etc/ssl/certs/rds-global-bundle.pem" },
 
         { name = "GIT_BRANCH", value = var.git_branch },
         { name = "GIT_COMMIT", value = var.git_commit },

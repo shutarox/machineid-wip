@@ -1,40 +1,45 @@
 #!/bin/bash
+#
+# 本番 ECS サービスの状態と、動いているイメージの出どころを表示する。
+
 set -euo pipefail
 
-usage() {
-  echo "Usage: $0 (dev|prod)-(main|util)"
+export AWS_PROFILE="machineid-prod"
+
+ecs_cluster="machineid-prod-ecs-cluster"
+ecs_service="machineid-prod-ecs-service"
+
+if ! aws sts get-caller-identity > /dev/null 2>&1; then
+  echo "### AWS の資格情報が無効です。次を実行してから再試行してください:"
+  echo "    aws sso login --sso-session machineid --use-device-code --no-browser"
   exit 1
-}
+fi
 
-[ $# -ne 1 ] && usage
-
-ENV="$1"
-case "${ENV}" in
-  dev-util|dev-main)  AWS_PROFILE="myapp-dev-tf-user-main" ;;
-  prod-util|prod-main) AWS_PROFILE="myapp-prod-tf-user-main" ;;
-  *) usage ;;
-esac
-
-ecs_cluster="${ENV}-ecs-cluster-main"
-ecs_service="${ENV}-ecs-service-main"
-ecs_task_family="${ENV}-ecs-task-family-main"
-
-echo "=== ${ENV} ==="
-echo ""
-
-echo "### Service Status"
+echo "=== service ==="
 aws ecs describe-services \
-  --profile "${AWS_PROFILE}" \
   --cluster "${ecs_cluster}" \
   --services "${ecs_service}" \
-  --query 'services[0].{desiredCount:desiredCount, runningCount:runningCount, pendingCount:pendingCount, status:status}' \
+  --query 'services[0].{status:status,desired:desiredCount,running:runningCount,pending:pendingCount,taskDefinition:taskDefinition}' \
   --output table
 
 echo ""
+echo "=== build info (動いているタスク定義) ==="
+task_def_arn=$(aws ecs describe-services --cluster "${ecs_cluster}" --services "${ecs_service}" \
+  --query 'services[0].taskDefinition' --output text)
 
-echo "### Build Info"
 aws ecs describe-task-definition \
-  --profile "${AWS_PROFILE}" \
-  --task-definition "${ecs_task_family}" \
+  --task-definition "${task_def_arn}" \
   --query 'taskDefinition.containerDefinitions[0].environment[?name==`GIT_BRANCH` || name==`GIT_COMMIT`]' \
   --output table
+
+echo ""
+echo "=== targets (ALB から見た健全性) ==="
+tg_arn=$(aws elbv2 describe-target-groups --names machineid-prod-tg-api \
+  --query 'TargetGroups[0].TargetGroupArn' --output text 2>/dev/null || echo "")
+if [ -n "${tg_arn}" ]; then
+  aws elbv2 describe-target-health --target-group-arn "${tg_arn}" \
+    --query 'TargetHealthDescriptions[].{target:Target.Id,port:Target.Port,state:TargetHealth.State,reason:TargetHealth.Reason}' \
+    --output table
+else
+  echo "(ターゲットグループが見つかりません)"
+fi

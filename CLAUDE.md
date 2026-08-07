@@ -67,7 +67,7 @@ DB は **PostgreSQL**(ローカルは docker compose の postgres:18)。コン�
   docker compose -f docker/docker-compose.local.yml up -d --no-deps minio
   ```
 
-  **コンテナ内から docker は叩けない**(docker.sock はマウントされているが権限がない)ので、ホスト側の実行はユーザーに依頼する。試行錯誤中は push を挟まず `/host/app` へ直接 cp するショートカットもあるが、**その一時上書きを消さないと次の push が通らない**。詳細と背景は `docs/dev-container.md` の「手順 1」
+  **コンテナ内からでも `sudo docker` は叩ける**(docker.sock は root 所有なので `sudo` が要る。パスワードなし sudo が使える)。イメージのビルドや `docker ps` はコンテナ内で完結する。**ただし dev コンテナ自身の再作成だけはユーザーに依頼する** — 実行したコマンドごと自分を殺すことになるため。試行錯誤中は push を挟まず `/host/app` へ直接 cp するショートカットもあるが、**その一時上書きを消さないと次の push が通らない**。詳細と背景は `docs/dev-container.md` の「手順 1」
 - **Context7 の使いどころ**: 外部ライブラリ/API の仕様が不確かなとき、セットアップ手順やバージョン差を疑うときに、該当箇所だけ参照する。まずコードベースを見て判断し、必要なときだけ呼ぶ。取得した情報は要点と短いコード例に要約する。接続設定はリポジトリ直下の `.mcp.json`(HTTP transport / `https://mcp.context7.com/mcp`)。API キーなしの匿名利用で動くが、レート制限に当たるようなら各自の `~/.claude.json` 側でヘッダ付きの設定に差し替える
 
 ## アーキテクチャ

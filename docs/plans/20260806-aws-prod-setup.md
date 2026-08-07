@@ -388,6 +388,46 @@ Arn: arn:aws:sts::439996178164:assumed-role/AWSReservedSSO_AdministratorAccess_.
   private サブネットにいるため接続手段自体がまだ無い。**最小権限の `appuser` への切り替えは
   `main-app` 到達後の課題**(`backend/prisma/createuser.sql` は MySQL 用の残骸だったので削除済み)
 
+#### フェーズ 5〜6 の実施記録(2026-08-07・**本番アプリ稼働まで到達**)
+
+`main-app` を apply し、マイグレーション・シード・SPA 配信まで通した。**ログインが通ることを確認済み**。
+
+```
+POST /api/login          → 200(デモテナント / 管理者 ADMIN)
+GET  /api/private/master → 200(セッション認証)
+GET  /api/ping           → 200(60ms)
+https://machineid.kas.jp/       → 200(/users も 200 = SPA ルーティング動作)
+セキュリティヘッダ → HSTS / nosniff / frame-options / referrer-policy
+```
+
+##### 潰した不具合(すべて雛形から引き継いだもの)
+
+**本番イメージは Prisma 7 / workspace 移行以降ビルドすら通らない状態だった。**
+
+| 症状 | 原因と対処 |
+|---|---|
+| `backend/pnpm-lock.yaml not found` | workspace のロックはルートに 1 本。ビルドステージをルート基準へ組み直し |
+| 起動時に `pnpm-workspace.yaml が見つかりません` | `repoRoot()` の探索対象を最終ステージにコピーしていなかった |
+| `Can't write to .../@prisma/engines` | 最終ステージの COPY が root 所有。`--chown=appuser` を付与 |
+| `no pg_hba.conf entry ... no encryption` | **RDS は SSL 必須**(`rds.force_ssl` 既定 1)。`DB_URL` に `sslmode` を追加 |
+| `self-signed certificate in certificate chain` | RDS CA バンドルをイメージに同梱し `NODE_EXTRA_CA_CERTS` を設定 |
+| CA を入れても効かない | **`su - appuser` が環境変数を捨てる**。`APPX_` 接頭辞でタスク定義に渡す必要があった |
+| ホスト名検証が通らない | 証明書の SAN は RDS 実エンドポイントのみ。`DB_URL` を実エンドポイント + `verify-full` に(ADR 改定履歴 2026-08-07) |
+| サービスが古いイメージのまま | **`ignore_changes = [task_definition]` の想定どおりの挙動**。`update-service --task-definition` で切り替える |
+| ターゲットが永久に unhealthy | `/api/ping` がテナント 0 件で 500(`docs/known-issues.md`)。シードで解消 |
+
+##### 初回構築だけの特殊事情
+
+- **タスク定義とサービスが同時にできる**ため、ADR の「タスク定義登録 → migrate → update-service」の順序が素直に適用できない。
+  `-target=aws_ecs_task_definition.main` で先にタスク定義を作り、migrate を流してからサービスを作った
+- **`-target` を使うと一部の `output` が state に入らない**(`task_network_configuration` が取れず run-task に失敗)。
+  サブネットと SG は `base` の output から直接渡した
+
+##### 未検証
+
+**`deploy/deploy_prod-main.sh` はまだ一度も通していない**(今回は相当する操作を手で実行)。
+スクリプトは `git clone` するため、**この差分をコミットしてからでないと検証できない**。
+
 ### 2. ネットワーク(`prod/base`)
 
 - `14_nat_gateway.tf` と NAT 用 `aws_eip` を**削除**

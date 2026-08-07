@@ -43,8 +43,12 @@ entrypoint は **`/host/app/etc/onstart-local.sh`**(ホスト clone 側)を実�
 
 ## 手順 1: 開発コンテナ設定の変更(Dockerfile.local / compose)★本題
 
-コンテナ自身の rebuild はコンテナ内からはできないため、変更をホスト clone に渡してから
-ホスト側でビルドする。GitHub は経由しない。
+**コンテナ自身の rebuild / 再作成だけ**は、コンテナ内から実行すると自分を殺してしまうため、
+変更をホスト clone に渡してからホスト側で実行する。GitHub は経由しない。
+
+**docker そのものはコンテナ内からも使える**(`sudo docker ...`。docker.sock は root 所有なので
+`sudo` が要るが、パスワードなし sudo が使える)。本番イメージのビルドや ECR への push は
+コンテナ内で完結するので、ホストへ渡す必要があるのは**この dev コンテナの構成変更だけ**。
 
 ### 事前設定(一度だけ)
 
