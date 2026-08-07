@@ -84,10 +84,19 @@ variable "domain_name" {
 
 variable "db_master_password" {
   description = <<-EOT
-    RDS のマスターパスワード。**リポジトリに書かない。**
-    apply 時に TF_VAR_db_master_password で渡すか、対話入力する。
+    RDS のマスターユーザ(postgres)のパスワード。**リポジトリに書かない。**
+
+    apply 時に TF_VAR_db_master_password で渡す。SSM に置いてあるので:
+      export TF_VAR_db_master_password=$(aws ssm get-parameter \
+        --name /<project_name>-keys/DB_MASTER_PASSWORD --with-decryption \
+        --query Parameter.Value --output text)
+
+    **アプリはこのユーザを使わない。** アプリ用は appuser で、そのパスワードは
+    SSM の /<project_name>-keys/DB_PASSWORD にある(script/db_bootstrap.ts が作る)。
+    マスターは terraform と DB の管理操作(ロール作成・作り直し)専用。
+
     作成後は lifecycle.ignore_changes で追跡外になるので、
-    ローテーションは AWS 側で行い SSM(/<project_name>-keys/DB_PASSWORD)を更新する。
+    ローテーションは AWS 側で行い SSM の DB_MASTER_PASSWORD を更新する。
   EOT
   type        = string
   sensitive   = true

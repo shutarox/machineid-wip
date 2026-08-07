@@ -34,7 +34,9 @@ cat /tmp/environment > /etc/environment
 # このファイル経由でだけ使わせるため。アプリは DB_URL しか見ない。
 if [ -n "${DB_PASSWORD:-}" ]; then
     # hostname:port:database:username:password
-    echo "*:*:*:postgres:${DB_PASSWORD}" > /app/.pgpass
+    # **アプリ用ロール(appuser)のもの。** マスター(postgres)のパスワードは
+    # タスクに渡していない(管理操作は SSM の DB_MASTER_PASSWORD を都度取得する)
+    echo "*:*:*:appuser:${DB_PASSWORD}" > /app/.pgpass
     chown appuser:appuser /app/.pgpass
     chmod 600 /app/.pgpass
 fi
