@@ -116,5 +116,5 @@ pnpm verify     # check + lint + test + e2e(CI と同一)
 
 - 3f(TypeScript 7 / tsgo 移行)
 - terraform / deploy / etc の opepro 固有値の汎用化(1-5 の未着手分)
-- `pgdump/pgdump.sh` の残存(1-5 で「全削除」と決定済みなのに残っている不一致)
+- `pgdump/pgdump.sh` の残存(1-5 で「全削除」と決定済みなのに残っている不一致)。**その後の決着(2026-08-04): 決定を覆して残すことにした**(`docs/template-repo-workplan.md`)
 - `docs/plans/20260803-tanstack-query-plan.md` の ADR 化 or 削除の判断(4-3)

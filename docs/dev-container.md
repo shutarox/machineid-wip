@@ -31,7 +31,8 @@
 - pnpm store は**設定なし**(pnpm デフォルトの `~/.local/share/pnpm`)。`~/app` と同一 volume なのでハードリンクが効く。旧設定(`~/.npmrc` の `store-dir=/data/pnpm-store`)は onstart が自動で除去する。
 - 追加 clone や `git worktree` は `~/` 配下に自由に作ってよい(同一 fs なので追加コストなし)。
 - イメージ内に `/app → /home/appuser/app` の symlink がある。コード中の `/app` ハードコードの移行用で、workplan 1-12(位置非依存化)で撤去予定。
-- ビルドコンテキスト(= ホスト clone 全体)は `.dockerignore` がホワイトリスト方式で防御している。現状イメージへの COPY は `.bashrc` だけだが、将来 COPY を足したときに残置ホームファイルの秘密情報(`.ssh` `.claude.json` `.pgpass` 等)や巨大ディレクトリ(`.terraform` は 19GB 級、pgdump の実データ)が紛れ込まないための保険。
+- ビルドコンテキストはリポジトリルート(ホスト clone 全体)。**`.dockerignore` は denylist 方式**で、`node_modules` / `.git` / `build` / `**/.terraform` / `pgdump` などを外している(2026-08-07 新設)。イメージへの COPY は `docker/home-appuser-local/` だけなので、そこに置くものを増やすときは中身に注意する。
+  > 以前ここには「`.dockerignore` がホワイトリスト方式で防御している」と書かれていたが、**その時点でファイル自体が存在しなかった**(2026-08-07 に本番イメージのビルドを通す過程で判明)。HOME をビルドコンテキストにしていた頃の名残の記述。
 
 ### 初回起動時の bootstrap(onstart-local.sh)
 
