@@ -21,6 +21,24 @@ done
 env | grep -E '^APPX_' | sed 's/^APPX_/export /' >> /tmp/environment;
 cat /tmp/environment > /etc/environment
 
+# DB_URL を組み立てる。
+#
+# **SSM には接続文字列を持たない。** 秘密なのはパスワードだけで、他は静的だから。
+# 2 本(DB_PASSWORD と DB_URL)持つと、ローテーションのたびに両方を更新することになり、
+# 片方だけ直して壊す事故が起きる。
+#
+# ホストは Route53 のプライベートゾーンの CNAME なので、**DB インスタンスを
+# 差し替えても変わらない**(terraform が CNAME を新しいエンドポイントへ向け直す)。
+# だからこの組み立て結果も変わらない。
+#
+# パスワードは URL に埋めるので、**URL セーフな文字だけで生成すること**
+# (script/db_bootstrap.ts と手順書の生成器は [A-Za-z0-9-_.~] に限定している)。
+# /etc/environment は KEY=VALUE として読まれるためクォート不要 — `?` や `&` も
+# そのまま値の一部になる(既存の APPX_DB_URL がこの形で動いていた)。
+if [ -z "${DB_URL:-}" ] && [ -n "${DB_PASSWORD:-}" ]; then
+    echo "export DB_URL=postgresql://${APPX_DB_USER}:${DB_PASSWORD}@${APPX_DB_HOST}:5432/${APPX_DB_NAME}?${APPX_DB_PARAMS}" >> /etc/environment
+fi
+
 # psql 用のパスワードファイル。
 #
 # 踏み台サーバを置かない構成では、DB を覗く手段が

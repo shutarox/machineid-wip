@@ -66,9 +66,10 @@ const admin = new Client({
   user: MASTER_USER,
   password: masterPassword,
   database: 'postgres',
-  // RDS は SSL 必須(rds.force_ssl=1)。CA はイメージに同梱していて
-  // NODE_EXTRA_CA_CERTS で信頼させているので、既定の検証で通る
-  ssl: process.env.NODE_EXTRA_CA_CERTS ? {} : undefined,
+  // RDS は SSL 必須(rds.force_ssl=1)。ただし接続先は Route53 の CNAME で、
+  // **証明書の SAN は RDS の実エンドポイントだけ**なのでホスト名検証は通らない。
+  // アプリ側の sslmode=no-verify と同じ扱いにする(暗号化はされる)
+  ssl: { rejectUnauthorized: false },
 });
 
 await admin.connect();
@@ -109,7 +110,7 @@ const created = new Client({
   user: MASTER_USER,
   password: masterPassword,
   database: dbName,
-  ssl: process.env.NODE_EXTRA_CA_CERTS ? {} : undefined,
+  ssl: { rejectUnauthorized: false },
 });
 
 await created.connect();

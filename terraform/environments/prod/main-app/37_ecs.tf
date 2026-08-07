@@ -77,9 +77,26 @@ resource "aws_ecs_task_definition" "main" {
       environment = [
         { name = "APPX_NODE_ENV", value = "production" },
         { name = "APPX_SERVER_ENV", value = "production" },
-        # **アプリはこれを読まない**(接続先は SSM の DB_URL)。
-        # ECS Exec で入って `psql -h $DB_HOST` を叩くときの利便のために残している
+        # **DB_URL の材料。** entrypoint(etc/onstart-prod-main.sh)がこれらと
+        # DB_PASSWORD を組み合わせて DB_URL を作る。
+        #
+        # **接続文字列を SSM に持たない**のは、秘密なのはパスワードだけで他は静的だから。
+        # 2 本(DB_PASSWORD と DB_URL)持つと、ローテーションのたびに両方を更新することになり、
+        # 片方だけ直して壊す事故が起きる。
+        #
+        # ホストは Route53 のプライベートゾーンの CNAME。**DB インスタンスを差し替えても
+        # 変わらない**(terraform が CNAME を新エンドポイントへ向け直す)ので、
+        # 復旧時に SSM の書き換えもタスクの入れ替えも要らない
+        # (`docs/decisions/20260806-aws-minimal-prod.md` の改定履歴 2026-08-07)。
         { name = "APPX_DB_HOST", value = "db-pg.${var.local_domain_name}" },
+        { name = "APPX_DB_USER", value = "appuser" },
+        { name = "APPX_DB_NAME", value = var.project_name },
+
+        # **`sslmode=no-verify`**: RDS は SSL 必須(rds.force_ssl=1)だが、
+        # 証明書の SAN は RDS の実エンドポイントだけなので、**CNAME 経由では
+        # ホスト名検証を通せない**(`verify-ca` でも pg の実装では検証される)。
+        # 暗号化はされる。Prisma 6 の Rust エンジンと同じ挙動
+        { name = "APPX_DB_PARAMS", value = "connection_limit=20&sslmode=no-verify" },
         { name = "APPX_ENABLE_DEBUG_MODE", value = "false" },
         { name = "APPX_SPA_APP_BASE_URL", value = "https://${local.url_host_name_spa}" },
         { name = "APPX_API_SERVER_BASE_URL", value = "https://${local.url_host_name_api}" },
@@ -102,16 +119,14 @@ resource "aws_ecs_task_definition" "main" {
         { name = "GIT_COMMIT", value = var.git_commit },
       ]
 
+      # **DB_URL は secrets に持たない。** entrypoint が DB_PASSWORD と
+      # 上の APPX_DB_* から組み立てる(この env の説明を参照)
       secrets = [
-        {
-          name      = "APPX_DB_URL"
-          valueFrom = "${local.ssm_prefix}/DB_URL"
-        },
         {
           # **`APPX_` を付けないのは意図的。** entrypoint(etc/onstart-prod-main.sh)が
           # これを読んで appuser の ~/.pgpass を生成する用途にだけ使い、
           # **appuser の環境変数には置かない**(アプリは DB_URL しか見ない)。
-          # ECS Exec で入って `su - appuser` → `psql -h $DB_HOST -U postgres machineid` が
+          # ECS Exec で入って `su - appuser` → `psql -h $DB_HOST -U appuser machineid` が
           # パスワード入力なしで通るようにするためのもの。
           name      = "DB_PASSWORD"
           valueFrom = "${local.ssm_prefix}/DB_PASSWORD"
