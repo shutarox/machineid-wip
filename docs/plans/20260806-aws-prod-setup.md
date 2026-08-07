@@ -529,25 +529,37 @@ onstart は `onstart-local.sh` と `onstart-prod-main.sh` の 2 本。
 - `deploy_dev-*` / `start_*` / `stop_*` は**削除**
 - `rollback.sh` を追加(`update-service --task-definition <前のリビジョン>` のみ)
 
-### 7. アプリ側: ジョブ基盤
+### 7. アプリ側: ジョブ基盤 — **実施済み(2026-08-07)**
 
-- スキーマに `ScheduledJob`(`tenantId` を持たない)
+| 追加 | 内容 |
+|---|---|
+| `ScheduledJob` モデル | `tenantId` を持たない(RLS 検査の対象外)。`name` が主キー、`nextRunAt` / `intervalSec` / `lastStartedAt` / `lastEndedAt` / `lastStatus` |
+| `src/jobs/index.ts` | ジョブのレジストリ(name → `{ intervalSec, description, run }`) |
+| `src/jobs/cleanupUploads.ts` | `script/cleanup_uploads.ts` から本体を移設 |
+| `src/jobs/scheduler.ts` | claim ループ・SIGTERM 対応・失敗の記録 |
+| `script/{cleanup_uploads,run_job,scheduler}.ts` | エントリポイント 3 本 |
+| `test/integration/framework/scheduler.test.ts` | 7 テスト |
 
-  ```prisma
-  model ScheduledJob {
-    name          String    @id
-    nextRunAt     DateTime  @db.Timestamptz(3)
-    lastStartedAt DateTime? @db.Timestamptz(3)
-    lastEndedAt   DateTime? @db.Timestamptz(3)
-    lastStatus    String?
-  }
-  ```
+**EventBridge の `cleanup_uploads` は撤去した**(`39_scheduled_task.tf`)。IAM ロールとポリシーは
+残してあるので、重い・低頻度のジョブが出てきたらルールを足すだけで復活できる。
 
-- `src/jobs/index.ts`(name → 関数のレジストリ)/ `src/jobs/scheduler.ts`(claim ループ)
-- `script/run_job.ts`(単発)/ `script/scheduler.ts`(単体プロセス起動用。**将来 C 構成に移すための出口**)
-- `src/index.ts` から環境変数でスケジューラを起動(ローカル / テストでは既定 off)
-- **SIGTERM 対応**: 新規 claim を止め、実行中のジョブを待つ(ECS の既定猶予は 30 秒)
-- `cleanup_uploads` を `src/jobs/` 側へ移し、`script/cleanup_uploads.ts` はエントリポイントだけにする
+#### 設計の要点
+
+- **claim は条件付き `updateMany`。** `WHERE name = ? AND next_run_at <= now()` で
+  `next_run_at` を進める。READ COMMITTED なので負けた側は 0 件になる。
+  **行ロックも AsyncLocalStorage も要らない**
+- **ジョブ本体は tx の外**。tx は既定 5 秒で切れ、`assertNotInTransaction` が tx 内の外部 I/O を禁止している
+- **`timer.unref()`**。これが無いと SIGTERM 後にイベントループが空にならず SIGKILL を待つ
+- **`ensureJobRows` は既存行を上書きしない**(`upsert` の `update` が空)。
+  デプロイのたびに `nextRunAt` をリセットすると、間隔の長いジョブが永久に走らない
+- **スケジューラは既定 off**(`SCHEDULER_ENABLED`)。本番だけ `APPX_SCHEDULER_ENABLED=true` を渡す。
+  ローカルとテストで勝手に走らせない
+
+#### 途中で直したもの
+
+**テストが claim の SQL を写経していた**(knip が `tickOnceForTesting` の未使用で気づかせた)。
+写経は**実装と乖離しても気づけない**ので、`claim` に `intervalSec` を引数で渡す形にして
+`export` し、**テストが実装そのものを検証する**ようにした。
 
 ### 8. 検証
 

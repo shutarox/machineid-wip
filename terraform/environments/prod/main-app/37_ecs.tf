@@ -98,6 +98,11 @@ resource "aws_ecs_task_definition" "main" {
         # 暗号化はされる。Prisma 6 の Rust エンジンと同じ挙動
         { name = "APPX_DB_PARAMS", value = "connection_limit=20&sslmode=no-verify" },
         { name = "APPX_ENABLE_DEBUG_MODE", value = "false" },
+
+        # **定期実行のスケジューラを有効にする。** 既定は off で、ローカル開発と
+        # テストでは走らない。複数タスクで同時に動いても claim(条件付き updateMany)で
+        # 1 回しか実行されない(src/jobs/scheduler.ts)
+        { name = "APPX_SCHEDULER_ENABLED", value = "true" },
         { name = "APPX_SPA_APP_BASE_URL", value = "https://${local.url_host_name_spa}" },
         { name = "APPX_API_SERVER_BASE_URL", value = "https://${local.url_host_name_api}" },
         { name = "APPX_COOKIE_DOMAIN", value = var.domain_name },

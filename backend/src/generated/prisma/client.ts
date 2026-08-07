@@ -86,3 +86,8 @@ export type Report = Prisma.ReportModel
  * 
  */
 export type UploadedImage = Prisma.UploadedImageModel
+/**
+ * Model ScheduledJob
+ * 
+ */
+export type ScheduledJob = Prisma.ScheduledJobModel

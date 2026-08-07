@@ -36,48 +36,20 @@ resource "aws_iam_role_policy" "eventbridge_ecs" {
   })
 }
 
-# 仮アップロードの後始末(3 日タイムアウト)。1 日 1 回で十分な重いジョブの例
-resource "aws_cloudwatch_event_rule" "cleanup_uploads" {
-  name                = "${local.name_prefix}-cleanup-uploads"
-  description         = "1 日 1 回 cleanup_uploads を実行する"
-  schedule_expression = "cron(0 18 * * ? *)" # UTC 18:00 = JST 03:00
-
-  tags = {
-    Name = "cleanup-uploads-schedule"
-  }
-}
-
-resource "aws_cloudwatch_event_target" "cleanup_uploads" {
-  rule      = aws_cloudwatch_event_rule.cleanup_uploads.name
-  target_id = "cleanup-uploads-ecs-task"
-  arn       = aws_ecs_cluster.main.arn
-  role_arn  = data.aws_iam_role.eventbridge_ecs.arn
-
-  ecs_target {
-    # **リビジョンを固定しない。** 固定すると、デプロイしても
-    # 定期実行だけ古いイメージで走り続ける(雛形はここがリビジョン固定だった)
-    task_definition_arn = aws_ecs_task_definition.main.arn_without_revision
-    task_count          = 1
-    launch_type         = "FARGATE"
-    platform_version    = "LATEST"
-
-    network_configuration {
-      subnets = [
-        data.aws_subnet.public_1a.id,
-        data.aws_subnet.public_1c.id,
-      ]
-
-      security_groups  = [data.aws_security_group.is_app.id]
-      assign_public_ip = true
-    }
-  }
-
-  input = jsonencode({
-    containerOverrides = [
-      {
-        name    = local.container_name
-        command = ["node", "/app/backend/build/script/cleanup_uploads.js"]
-      }
-    ]
-  })
-}
+# **いまのところ EventBridge で回すジョブは無い。**
+#
+# `cleanup_uploads` はここにあったが、**API プロセス内のスケジューラへ移した**
+# (ADR docs/decisions/20260806-deploy-and-scheduled-jobs.md 決定 4)。
+# 軽い(数秒 / I/O 中心 / バッチサイズで区切れる)ジョブなので、
+# 使い捨てタスクの起動コスト(Fargate の最小課金 1 分 + 毎回のイメージ pull)に見合わない。
+#
+# ここに足すのは**重い・低頻度**のものだけ:
+#
+#   - 日次の集計、大量データの削除、外部への一括送信
+#   - CPU バウンドな処理(API のイベントループを止めるとヘルスチェックが落ちる)
+#   - 取りこぼしが許されないもの(スケジューラは at-most-once)
+#
+# 足すときは `aws_cloudwatch_event_rule` と `aws_cloudwatch_event_target` を対で書き、
+# **`task_definition_arn` には `arn_without_revision` を渡すこと**
+# (リビジョン固定にすると、デプロイしても定期実行だけ古いイメージで走り続ける)。
+# 上の `aws_iam_role_policy.eventbridge_ecs` は残してあるので、ルールを足すだけで動く。

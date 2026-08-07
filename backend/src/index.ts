@@ -1,4 +1,5 @@
 import { buildApp } from '@/app.js';
+import { startScheduler, stopScheduler } from '@/jobs/scheduler.js';
 import { generateOpenApiSchema } from '@/libs/generateOpenApiSchema.js';
 
 // 起動時 assert: 日時処理(@db.Date 正規化・JST シリアライズ)は
@@ -35,9 +36,32 @@ fastify.ready(async (err) => {
     });
   }
 
+  // 定期実行のスケジューラ。**既定は off**(ローカル開発とテストで勝手に走らせない)。
+  // 本番はタスク定義で APPX_SCHEDULER_ENABLED=true を渡す。
+  //
+  // 複数タスクで同時に動いても、claim(条件付き updateMany)で 1 回しか実行されない
+  // (src/jobs/scheduler.ts)。
+  if (process.env.SCHEDULER_ENABLED === 'true') {
+    await startScheduler();
+  }
+
   console.log('listen...');
   await fastify.listen({
     host: '0.0.0.0',
     port: Number(process.env.BACKEND_PORT ?? 8080),
   });
 });
+
+// ECS はデプロイ時に SIGTERM を送り、既定 30 秒で SIGKILL する。
+// **新規の claim を止めて実行中のジョブを待ってから落ちる**ことで、
+// 途中で切られたジョブが lastStatus を残せずに終わるのを減らす。
+// (claim 済みで中断した回は次の窓まで実行されない = at-most-once)
+const shutdown = async (signal: string) => {
+  console.log(`${signal} を受信しました。終了処理を開始します`);
+  await stopScheduler();
+  await fastify.close();
+  process.exit(0);
+};
+
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));

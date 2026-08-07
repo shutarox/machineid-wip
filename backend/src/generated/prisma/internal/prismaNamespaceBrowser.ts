@@ -59,7 +59,8 @@ export const ModelName = {
   DateExample: 'DateExample',
   DebugParameter: 'DebugParameter',
   Report: 'Report',
-  UploadedImage: 'UploadedImage'
+  UploadedImage: 'UploadedImage',
+  ScheduledJob: 'ScheduledJob'
 } as const
 
 export type ModelName = (typeof ModelName)[keyof typeof ModelName]
@@ -205,6 +206,20 @@ export const UploadedImageScalarFieldEnum = {
 } as const
 
 export type UploadedImageScalarFieldEnum = (typeof UploadedImageScalarFieldEnum)[keyof typeof UploadedImageScalarFieldEnum]
+
+
+export const ScheduledJobScalarFieldEnum = {
+  name: 'name',
+  createdAt: 'createdAt',
+  updatedAt: 'updatedAt',
+  nextRunAt: 'nextRunAt',
+  intervalSec: 'intervalSec',
+  lastStartedAt: 'lastStartedAt',
+  lastEndedAt: 'lastEndedAt',
+  lastStatus: 'lastStatus'
+} as const
+
+export type ScheduledJobScalarFieldEnum = (typeof ScheduledJobScalarFieldEnum)[keyof typeof ScheduledJobScalarFieldEnum]
 
 
 export const SortOrder = {

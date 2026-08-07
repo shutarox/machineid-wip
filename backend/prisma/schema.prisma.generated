@@ -232,3 +232,35 @@ model UploadedImage {
   @@index([tenantId, createdAt])
   @@map("uploaded_images")
 }
+
+// 定期実行ジョブの実行権(claim)。
+//
+// **tenantId を持たない。** テナント横断の仕組みなので、Prisma 拡張の RLS 検査は
+// 対象外になる(検査は tenantId カラムを持つモデルにだけ効く)。
+// 扱いは nestableTransaction(テナント指定なし)。
+//
+// API タスクは autoscaling で複数動くため、**単純な setInterval では最大 3 重に走る**。
+// nextRunAt を条件に含めた updateMany を claim として使い、1 回だけ実行させる
+// (ADR docs/decisions/20260806-deploy-and-scheduled-jobs.md 決定 4)。
+model ScheduledJob {
+  // ジョブ名。src/jobs/index.ts のレジストリのキーと一致させる
+  name String @id @db.VarChar(255)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz(3)
+
+  // 次に実行してよくなる時刻。**claim はこの値の比較と更新で成立する**
+  nextRunAt DateTime @map("next_run_at") @db.Timestamptz(3)
+
+  // 実行間隔(秒)。nextRunAt を進めるのに使う
+  intervalSec Int @map("interval_sec")
+
+  lastStartedAt DateTime? @map("last_started_at") @db.Timestamptz(3)
+  lastEndedAt   DateTime? @map("last_ended_at") @db.Timestamptz(3)
+
+  // 'ok' | 'error'。失敗の詳細はログを見る(ここに積むと肥大する)
+  lastStatus String? @map("last_status") @db.VarChar(255)
+
+  @@index([nextRunAt])
+  @@map("scheduled_jobs")
+}
