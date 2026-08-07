@@ -1,0 +1,12 @@
+// 本番ビルド用。**テストコードを成果物に含めない。**
+//
+// tsconfig.json は `pnpm check`(型検査)とエディタのためのもので、テストも対象にする。
+// そちらで `pnpm build` すると `build/test/` と `build/vitest.config.js` ができ、
+// **本番イメージにテストが焼き込まれる**(Dockerfile.prod-main が build/ をまるごと運ぶため)。
+//
+// 実害は容量だけではない: `script/test/mailtest.ts` の系統(雛形の履歴で SES の
+// 認証情報が直書きされていたファイル)を本番に載せない、という意味もある。
+{
+  "extends": "./tsconfig.json",
+  "include": ["src/**/*", "script/**/*"]
+}

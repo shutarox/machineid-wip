@@ -69,6 +69,9 @@
 | 12 | **`reloadReservation` が API の公開契約に残っている。** `backend/src/libs/commonSchemas.ts` の `responseActions` の先頭にあり、`commonErrorsSchema` 経由で**全エラーレスポンスの型に入る**ため、生成 OpenAPI 型(`frontend/src/generated/openapi-schema.d.ts`)に 9 箇所以上伝播している。**旧プロダクトの予約ドメイン由来**で、サーバ側に送出箇所は無く、フロントの `queryClient.ts` も処理していない(扱うのは `forceLogout` / `historyBack` / `reloadApp` の 3 つ)。**完全な死語だが、API を読んだ人は予約機能を探すことになる** | 2026-08-07 |
 | 13 | **`backend/script/prepare_locks.ts` のロック名が旧プロダクトのドメイン語。** `const lockNames = ['sharedAssignment', 'reservation']`(共有割り当て / 予約)。**このスクリプト自体どこからも参照されておらず**、`editLock` を使っているのもテストの `factories.ts` だけでアプリ本体に利用箇所が無い。`getLock` の仕組みは雛形の機能として残す価値があるが(ADR に登場する)、**ロック名は案件ごとに定義するもの**なので、雛形には具体名を置かず「ここに案件のロック名を書く」形にすべき | 2026-08-07 |
 
+| 16 | **`deploy/notify_slack.sh` が通知の失敗を握りつぶす。** `curl ... || echo "failed"` は**トランスポート層の失敗でしか発火しない**ため、プレースホルダや失効した webhook に POST しても HTTP 302 / 404 が返るだけで**成功扱いになる**(実測)。しかも「未設定ならスキップ」の分岐があるので、**プレースホルダが入っている状態は未設定より悪い**(スキップの表示すら出ない)。`--fail` を付けるか `%{http_code}` を検査して 2xx 以外を警告する | 2026-08-07 |
+| 17 | **`pnpm build` がテストコードを本番成果物に含める。** `tsconfig.json` の `include` に `test/**/*` と `vitest.config.ts` があり、`rootDir: "."` なので `build/test/` と `build/vitest.config.js` ができる。`Dockerfile.prod-main` は `build/` をまるごと運ぶため**本番イメージにテストが焼き込まれる**。容量だけでなく、`script/test/mailtest.ts` の系統(雛形の履歴で SES 認証情報が直書きされていたファイル)を本番に載せない意味もある。**`tsconfig.build.json` を分けて `include` を `src` + `script` に絞る**(`machineid` 側で対応済み。差分をそのまま持っていける)。あわせて `rootDirs`(複数形)は効いておらず、外しても型検査が通ることを確認した | 2026-08-07 |
+
 ### 派生手順そのものへの追記(`myapp` の計画側に反映)
 
 | # | 内容 |

@@ -97,6 +97,47 @@
 
 **対応するときの方針**: 初期パスワードを標準出力ではなく **SSM の SecureString に書き込む**(`/machineid-keys/INITIAL_ADMIN_PASSWORD` 等)か、パスワードを設定せず**初回のパスワード設定リンクを発行する**方式にする。当面は**本番でシードしたら管理者パスワードを変更する**運用とする。
 
+### Slack 通知が設定されておらず、しかも**黙って握りつぶされている**
+
+- 記録日: 2026-08-07
+- 対象: `deploy/notify_slack.sh` / `docker/docker-compose.local.yml`
+- **まっさら化の後に設定する**(この台帳は残るので、そこで拾う)
+
+**症状**: `SLACK_NOTICE_WEBHOOK_URL` が実在する webhook になっていない。
+
+- 開発コンテナには compose が**プレースホルダ**を入れている(`https://hooks.slack.com/services/***/***/***`)
+- **本番の ECS タスク定義には入っていない**(アプリ側は使っておらず、使うのは `deploy/*.sh` だけ)
+
+そして `notify_slack.sh` は**未設定のときだけスキップの旨を出す**作りなので、
+プレースホルダが入っていると通知を試み、失敗を握りつぶす。
+
+```
+$ curl -s -o /dev/null -w "%{http_code}" -X POST ... "https://hooks.slack.com/services/***/***/***"
+302   ← curl の終了コードは 0
+```
+
+`curl ... || echo "failed"` は **HTTP エラーでは発火しない**(トランスポート層の失敗だけ)。
+結果として **「未設定」より悪い** — スキップの表示すら出ないので、通知が飛んでいないことに気づけない。
+実際、今日のデプロイ 8 回はすべて無言で終わっている。
+
+**影響**: デプロイ完了・**マイグレーション失敗**の通知が誰にも届かない。
+`deploy_prod-main.sh` は migrate が失敗すると `notify_slack "... **migration failed** ..."` を出すが、
+これも飛んでいない。**気づけないまま失敗する経路**になっている。
+
+**見送り理由**: 運用者が実質 1 名で、デプロイは対話的に実行して結果を目で見ているため。
+
+**対応するときの方針**:
+
+1. 実在する Incoming Webhook を作り、**SSM の SecureString**(`/<project>-keys/SLACK_NOTICE_WEBHOOK_URL`)に置く
+   — compose に直書きすると雛形の履歴に残る(**過去に実際に webhook URL が履歴へ混入している**。
+   `docs/plans/20260806-derive-first-project.md` の「秘密情報の混入」)
+2. `deploy/*.sh` は実行時に SSM から取得する(`aws ssm get-parameter`)
+3. **`notify_slack.sh` を「HTTP ステータスも見る」ように直す。** いまの実装は
+   プレースホルダや失効した webhook を黙って見逃す。`-f`(`--fail`)を付けるか
+   `%{http_code}` を検査し、2xx 以外なら警告を出す
+
+**3 は雛形にも同じ問題があるので還元対象**(`docs/template-feedback.md`)。
+
 ### ECS Exec のセッションログを保存していない
 
 - 記録日: 2026-08-06
