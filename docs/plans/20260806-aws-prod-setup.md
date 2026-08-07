@@ -504,7 +504,17 @@ COPY --from=build /app/backend/prisma          /app/backend/prisma       # migra
 COPY --from=build /app/backend/prisma.config.ts /app/backend/
 ```
 
-`Dockerfile.dev-*` と `docker/home-appuser-dev/` は**削除**(util 廃止に伴う)。
+**実施済み(2026-08-07)**: util 廃止に伴い次を削除した。参照はこれらの間で閉じており、
+compose・CI・deploy スクリプトからの参照はゼロだった。
+
+```
+etc/onstart-dev-main.sh   etc/onstart-dev-util.sh   etc/onstart-prod-util.sh
+docker/Dockerfile.dev-main  docker/Dockerfile.dev-util  docker/Dockerfile.prod-util
+docker/home-appuser-dev/
+```
+
+残るのは `Dockerfile.local`(開発コンテナ)と `Dockerfile.prod-main`(本番)の 2 本、
+onstart は `onstart-local.sh` と `onstart-prod-main.sh` の 2 本。
 
 ### 6. デプロイスクリプト(`deploy/`)
 

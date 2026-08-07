@@ -17,7 +17,7 @@
 - `Dockerfile.dev-util` が `openssh-server` を入れ、`etc/onstart-dev-util.sh` の最後が `exec /usr/sbin/sshd -D`
 - **公開 NLB**(`util/36_nlb.tf`)のポート 1022 → コンテナの 22 に転送
 - 同時に `pm2` で `pnpm dev` を回し、ALB 経由で SPA(443)と API(8443)も配信 = **dev には同じアプリのデプロイが 2 つある**(ビルド版の `main-app` とソース版の `util-app`)
-- SSH 鍵が `docker/home-appuser-dev/.ssh` としてイメージに焼かれている
+- **イメージに SSH 鍵を焼き込む前提の作り**になっている(`Dockerfile.dev-util` に `chmod 700 /app/.ssh && chmod 600 /app/.ssh/*` があり、`docker/home-appuser-dev/` を `/app/` へ COPY する)。**ただし HEAD に鍵そのものは無い**(このディレクトリにあるのは `.bashrc` と `.bash_profile` だけで、`chmod` は `|| true` で失われた鍵の不在を許容している)。問題は鍵が漏れていることではなく、**鍵をイメージに同梱する設計になっていること**
 
 一方、**定期バッチはすでに util ではなく main 側で動いている**(`main-app/39_ecs-scheduled-task.tf` が main のタスク定義に `containerOverrides.command` を渡して EventBridge から `run-task` する)。つまり util が担っていたのは「SSH で入って手作業する」ことと「dev 環境そのもの」の 2 つだけだった。
 
