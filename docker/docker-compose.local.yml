@@ -57,7 +57,7 @@ services:
       # AWS_PROFILE はここでは設定しない。terraform は各環境の .envrc が、
       # deploy スクリプトは自前で export するので、コンテナ全体に設定する必要がないため。
       # (MinIO の資格情報を S3_ 接頭辞に分離したので、設定しても衝突はしない)
-      - SLACK_NOTICE_WEBHOOK_URL=https://hooks.slack.com/services/***/***/***
+      - SLACK_WEBHOOK_URL=https://hooks.slack.com/services/***/***/***
     volumes:
       # ホスト clone は compose 操作・イメージビルド・受け渡し(git remote "host")専用。
       # 作業コピーは home volume 上の ~/app(コンテナ内 clone 方式、docs/dev-container.md 参照)
